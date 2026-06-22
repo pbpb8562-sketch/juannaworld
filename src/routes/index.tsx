@@ -5,9 +5,11 @@ import logo from "@/assets/juanna-world-logo.png.asset.json";
 const PHONE_RAW = "3156771426";
 const PHONE_DISPLAY = "(315) 677-1426";
 const SMS_HREF = `sms:+1${PHONE_RAW}?&body=${encodeURIComponent(
-  "VERIFY — I'm 21+ and want to order from Juanna World.",
+  "VERIFY — I'm 21+ and want the Juanna World menu password.",
 )}`;
 const TEL_HREF = `tel:+1${PHONE_RAW}`;
+const ACCESS_PASSWORD = "Juannaw0r1d";
+const ORBS_REEL = "https://www.instagram.com/reel/DTgMihvkixY/?igsh=d2JrM2o3ZjA0MTl0";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -16,12 +18,12 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "Top-shelf flower, non-CRC live resin, Hashers Anonymous live rosin & Boutiq V5 Orbs delivered within 35 miles of Cortland, NY.",
+          "Verified members only. Text to verify and receive the Juanna World menu password. Delivery within 35 miles of Cortland, NY.",
       },
       { property: "og:title", content: "Juanna World — Cannabis Delivery" },
       {
         property: "og:description",
-        content: "Delivery within 35 miles of Cortland, NY. Text to verify.",
+        content: "Text to verify. Members-only menu. 35 mi around Cortland, NY.",
       },
       { property: "og:image", content: logo.url },
       { name: "twitter:image", content: logo.url },
@@ -31,9 +33,17 @@ export const Route = createFileRoute("/")({
 });
 
 function Home() {
+  const [unlocked, setUnlocked] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (sessionStorage.getItem("jw_unlocked") === "1") setUnlocked(true);
+  }, []);
+
+  if (!unlocked) return <Gate onUnlock={() => setUnlocked(true)} />;
+
   return (
     <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
-      <AgeGate />
       <Nav />
       <Hero />
       <Stats />
@@ -46,42 +56,99 @@ function Home() {
   );
 }
 
-/* ---------------- Age Gate ---------------- */
-function AgeGate() {
-  const [open, setOpen] = useState(true);
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (localStorage.getItem("jw_verified_21") === "1") setOpen(false);
-  }, []);
-  if (!open) return null;
-  const confirm = () => {
-    localStorage.setItem("jw_verified_21", "1");
-    setOpen(false);
+/* ---------------- Access Gate (phone + password) ---------------- */
+function Gate({ onUnlock }: { onUnlock: () => void }) {
+  const [pw, setPw] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (pw.trim() === ACCESS_PASSWORD) {
+      sessionStorage.setItem("jw_unlocked", "1");
+      setErr(null);
+      onUnlock();
+    } else {
+      setErr("Incorrect password. Text to verify and request access.");
+    }
   };
+
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
-      <div className="max-w-md w-full rounded-3xl bg-card border border-border p-8 text-center shadow-glow">
-        <img src={logo.url} alt="Juanna World" className="w-24 h-24 mx-auto mb-4 drop-shadow-xl" />
-        <h2 className="text-2xl mb-2">Are you 21 or older?</h2>
-        <p className="text-sm text-muted-foreground mb-6">
-          You must be 21+ to enter Juanna World. By continuing you confirm you are of legal age in
-          New York State.
-        </p>
-        <div className="flex gap-3">
-          <button
-            onClick={confirm}
-            className="flex-1 rounded-full bg-primary text-primary-foreground font-semibold py-3 hover:opacity-90 transition shadow-glow"
+    <div className="min-h-screen bg-hero text-foreground flex flex-col">
+      <div className="flex-1 flex items-center justify-center px-5 py-12">
+        <div className="w-full max-w-md">
+          <div className="text-center">
+            <img
+              src={logo.url}
+              alt="Juanna World"
+              className="w-28 h-28 mx-auto drop-shadow-2xl animate-float"
+            />
+            <h1 className="mt-6 text-4xl md:text-5xl font-extrabold leading-tight">
+              Juanna <span className="text-gradient-flame">World</span>
+            </h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Members-only cannabis delivery · 35 mi around Cortland, NY
+            </p>
+          </div>
+
+          <div className="mt-8 rounded-3xl border border-primary/40 bg-gradient-to-br from-primary/15 to-secondary/10 p-6 shadow-glow text-center">
+            <div className="text-xs uppercase tracking-[0.25em] text-secondary font-semibold">
+              Step 1 · Text to Verify
+            </div>
+            <div className="mt-2 text-3xl md:text-4xl font-display font-extrabold">
+              {PHONE_DISPLAY}
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Text us — confirm you're 21+ and we'll reply with the menu password.
+            </p>
+            <div className="mt-4 flex flex-col sm:flex-row gap-2">
+              <a
+                href={SMS_HREF}
+                className="flex-1 rounded-full bg-primary text-primary-foreground font-semibold px-5 py-3 text-center shadow-glow hover:opacity-90 transition"
+              >
+                Text to Verify
+              </a>
+              <a
+                href={TEL_HREF}
+                className="flex-1 rounded-full border border-border bg-card px-5 py-3 font-semibold text-center hover:bg-muted transition"
+              >
+                Save Contact
+              </a>
+            </div>
+          </div>
+
+          <form
+            onSubmit={submit}
+            className="mt-6 rounded-3xl border border-border bg-card p-6 shadow-card"
           >
-            Yes, I'm 21+
-          </button>
-          <a
-            href="https://www.google.com"
-            className="flex-1 rounded-full border border-border py-3 font-medium text-muted-foreground hover:bg-muted transition"
-          >
-            Exit
-          </a>
+            <label className="text-xs uppercase tracking-[0.25em] text-muted-foreground font-semibold">
+              Step 2 · Enter Password
+            </label>
+            <input
+              type="password"
+              autoComplete="off"
+              value={pw}
+              onChange={(e) => setPw(e.target.value)}
+              placeholder="Menu password"
+              className="mt-3 w-full rounded-xl bg-background border border-border px-4 py-3 text-base outline-none focus:border-primary transition"
+            />
+            {err && (
+              <p className="mt-2 text-sm text-red-400">{err}</p>
+            )}
+            <button
+              type="submit"
+              className="mt-4 w-full rounded-full bg-primary text-primary-foreground font-semibold py-3 shadow-glow hover:opacity-90 transition"
+            >
+              Unlock Menu
+            </button>
+            <p className="mt-3 text-[11px] text-muted-foreground text-center leading-relaxed">
+              21+ only. By unlocking you confirm you are of legal age in New York State.
+            </p>
+          </form>
         </div>
       </div>
+      <footer className="px-5 pb-8 text-center text-[11px] text-muted-foreground">
+        © {new Date().getFullYear()} Juanna World · Cortland, NY
+      </footer>
     </div>
   );
 }
@@ -128,7 +195,7 @@ function Hero() {
             Top-shelf <span className="text-gradient-flame">delivered</span> to your door.
           </h1>
           <p className="mt-5 text-lg text-muted-foreground max-w-lg">
-            Flower, non-CRC live resin, Hashers Anonymous live rosin, and Boutiq V5 Orbs.
+            Flower, non-CRC live resin, Hashers Anonymous live rosin, and Boutiq V5 disposables.
             Discreet, fast, and curated by people who actually smoke.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
@@ -146,7 +213,7 @@ function Hero() {
             </a>
           </div>
           <p className="mt-4 text-xs text-muted-foreground">
-            21+ only. Verification required — text us to get on the list.
+            21+ only. Verified members only.
           </p>
         </div>
         <div className="relative flex justify-center md:justify-end">
@@ -272,12 +339,8 @@ function Menu() {
               <h3 className="mt-2 text-2xl">{t.name}</h3>
               <p className="mt-2 text-sm text-muted-foreground">{t.vibe}</p>
               <div className="mt-6 space-y-2 border-t border-border pt-4">
-                {t.oz && (
-                  <Row label="Ounce" value={t.oz} />
-                )}
-                {t.lb && (
-                  <Row label="Pound" value={t.lb} />
-                )}
+                {t.oz && <Row label="Ounce" value={t.oz} />}
+                {t.lb && <Row label="Pound" value={t.lb} />}
               </div>
             </div>
           ))}
@@ -360,35 +423,55 @@ function SectionHeader({
   );
 }
 
-/* ---------------- Orbs ---------------- */
+/* ---------------- Orbs (2g Disposable Vape) ---------------- */
 function Orbs() {
   return (
     <section id="orbs" className="py-20 md:py-24 bg-card/40 border-y border-border">
       <div className="max-w-6xl mx-auto px-5 grid md:grid-cols-2 gap-12 items-center">
         <div>
           <SectionHeader
-            eyebrow="Glass · Accessories"
+            eyebrow="Vapes · California Drop"
             title="Boutiq V5 Orbs"
-            sub="$50 each — limited drop."
+            sub="$50 each — 2g all-in-one disposable vape."
           />
           <div className="mt-6 space-y-4 text-muted-foreground">
             <p>
-              <strong className="text-foreground">What they are:</strong> Boutiq V5 Orbs are
-              premium hand-finished terp pearls — small spheres (usually quartz, ruby, or
-              sapphire) that you drop into the bottom of your banger or quartz insert.
+              <strong className="text-foreground">What they are:</strong> The Boutiq V5 Orb is a
+              fully <strong className="text-foreground">disposable 2-gram vape</strong> out of
+              California — no cart, no battery to charge separately, no buttons. You pull straight
+              from the device and toss it when it's done.
             </p>
             <p>
-              When you take a low-temp dab, the airflow spins the orbs around your puddle of
-              concentrate. That movement evenly coats the hot quartz, vaporizes the oil faster
-              and cleaner, and pulls out way more terpene flavor without scorching the rosin or
-              resin.
+              Each Orb is filled with <strong className="text-foreground">2 grams of live-resin
+              cannabis oil</strong> — strain-specific, high-terpene, and made without cutting
+              agents like PG, VG, or MCT. The V5 generation upgrades the hardware: improved
+              airflow, a bigger built-in battery to actually finish the full 2g, and a smoother
+              draw than older pod systems.
             </p>
             <p>
-              Translation: <em className="text-foreground">cooler dabs, fatter clouds, better
-              taste, and less waste.</em> The V5 batch is the newest generation — polished
-              finish, perfect roundness, and built to handle daily heat cycles without
-              cracking.
+              Translation: <em className="text-foreground">discreet, potent, full-flavor — open
+              the box, rip it, throw it away when empty.</em>
             </p>
+            <p className="text-xs">
+              Info sourced from California Boutiq retail listings (see dispensary menus like
+              Cookies, Catalyst, and Embarc for the V-series product line).
+            </p>
+          </div>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <a
+              href={ORBS_REEL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded-full bg-primary text-primary-foreground font-semibold px-5 py-3 shadow-glow hover:opacity-90 transition"
+            >
+              ▶ Watch the Orb in action
+            </a>
+            <a
+              href={SMS_HREF}
+              className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-5 py-3 font-semibold hover:bg-muted transition"
+            >
+              Text to grab one — $50
+            </a>
           </div>
         </div>
         <div className="relative aspect-square max-w-md mx-auto w-full">
@@ -399,6 +482,9 @@ function Orbs() {
               <Orb className="absolute bottom-6 right-4 w-32 h-32" hue="green" />
               <Orb className="absolute top-1/3 right-10 w-20 h-20" hue="amber" />
               <Orb className="absolute bottom-10 left-8 w-16 h-16" hue="rose" />
+            </div>
+            <div className="absolute top-4 left-4 rounded-full bg-background/70 backdrop-blur border border-border text-xs font-semibold px-3 py-1.5">
+              2g Disposable · CA
             </div>
             <div className="absolute bottom-4 right-4 rounded-full bg-primary text-primary-foreground text-sm font-bold px-4 py-2 shadow-glow">
               $50 / orb
