@@ -363,7 +363,7 @@ const concentrates = [
       { q: "14g", p: "$525" },
       { q: "28g", p: "$1,000" },
     ],
-    desc: "Top-tier solventless rosin pressed from fresh-frozen hash.",
+    desc: "Top-tier solventless rosin pressed from top-tier hash.",
   },
 ];
 
