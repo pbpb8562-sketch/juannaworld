@@ -6,11 +6,11 @@ const ORB_IMG_URL = "/IMG_0335.png";
 const PHONE_RAW = "3156771426";
 const PHONE_DISPLAY = "(315) 677-1426";
 const SMS_HREF = `sms:+1${PHONE_RAW}?&body=${encodeURIComponent(
-  "VERIFY — I'm 21+ and want the Juanna World menu password.",
+  "VERIFICATION — I'm 21+ and want the Juanna World menu password.",
 )}`;
 const TEL_HREF = `tel:+1${PHONE_RAW}`;
 const ACCESS_PASSWORD = "Juannaw0r1d";
-const ORBS_REEL = "https://www.instagram.com/reel/DTgMihvkixY/?igsh=d2JrM2o3ZjA0MTl0";
+const ORBS_REEL = "https://www.instagram.com/reel/DVqlymUDLJi/?igsh=d2NucTRkMWU5b3Fh";
 
 function DeliveryStatus() {
   const [status, setStatus] = useState<"open" | "preorder" | "closed">("closed");
