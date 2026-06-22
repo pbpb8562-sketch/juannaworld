@@ -6,7 +6,7 @@ const ORB_IMG_URL = "/IMG_0335.png";
 const PHONE_RAW = "3156771426";
 const PHONE_DISPLAY = "(315) 677-1426";
 const SMS_HREF = `sms:+1${PHONE_RAW}?&body=${encodeURIComponent(
-  "VERIFICATION — I'm 21+ and want the Juanna World menu password.",
+  "VERIFICATION(PLEASE INCLUDE PHOTO ID) — I'm 21+ and want the Juanna World menu password.",
 )}`;
 const TEL_HREF = `tel:+1${PHONE_RAW}`;
 const ACCESS_PASSWORD = "Juannaw0r1d";
