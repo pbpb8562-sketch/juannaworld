@@ -69,10 +69,15 @@
 }
 
 @layer base {
-  /* ...the rest of your base...*/
-  #lovable-badge {
-    display: none !important;
-  }
+ * { border-color: var(--color-border); }
+-html, body {
+ー
+background: var(--background);
+ー
+color: var (--foreground);
+ー
+font-family: var(--font-body);
+-webkit-font-smoothing: antialiased;
 }
   h1, h2, h3, h4 {
     font-family: var(--font-display);
