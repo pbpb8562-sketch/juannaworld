@@ -523,7 +523,7 @@ function Orbs() {
               href={SMS_HREF}
               className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-5 py-3 font-semibold hover:bg-muted transition"
             >
-              Text to grab one — $50
+             Grab one Now! — $50
             </a>
           </div>
         </div>
