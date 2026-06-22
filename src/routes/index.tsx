@@ -623,6 +623,67 @@ function Verify() {
   );
 }
 
+/* ---------------- Payments ---------------- */
+function Payments() {
+  const methods = [
+    {
+      name: "Cash App",
+      tag: "$JuannaWorld",
+      d: "Send as 'Friends' with no note about product. Screenshot the receipt and text it in to confirm your drop.",
+      accent: "from-emerald-400 to-green-600",
+      icon: "$",
+    },
+    {
+      name: "PayPal",
+      tag: "Friends & Family only",
+      d: "Request our handle when you text to verify. Send F&F — no item description. Forward the confirmation email or screenshot.",
+      accent: "from-sky-400 to-blue-600",
+      icon: "P",
+    },
+    {
+      name: "Cash on Delivery",
+      tag: "Exact change preferred",
+      d: "Pay your driver in cash at the door. Have ID ready (21+). Tips appreciated and go straight to the driver.",
+      accent: "from-amber-400 to-orange-600",
+      icon: "$",
+    },
+  ];
+
+  return (
+    <section id="payments" className="py-20 md:py-28">
+      <div className="max-w-6xl mx-auto px-5">
+        <SectionHeader
+          eyebrow="Checkout"
+          title="Pay your way."
+          subtitle="Three easy options. Lock in your order over text — we'll confirm payment details before the driver rolls out."
+        />
+        <div className="grid md:grid-cols-3 gap-5 mt-12">
+          {methods.map((m) => (
+            <div
+              key={m.name}
+              className="rounded-3xl border border-border bg-card/60 p-7 hover:border-primary/40 transition group"
+            >
+              <div
+                className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${m.accent} flex items-center justify-center text-2xl font-extrabold text-white shadow-glow mb-5`}
+              >
+                {m.icon}
+              </div>
+              <div className="font-display text-2xl font-bold">{m.name}</div>
+              <div className="text-xs uppercase tracking-widest text-primary mt-1">{m.tag}</div>
+              <p className="text-muted-foreground text-sm mt-4 leading-relaxed">{m.d}</p>
+            </div>
+          ))}
+        </div>
+        <div className="mt-8 rounded-2xl border border-border/60 bg-card/30 p-5 text-xs text-muted-foreground text-center">
+          Digital payments must be sent as <span className="text-foreground font-semibold">Friends & Family</span> with
+          no product references. Orders ship after payment is confirmed (COD excluded).
+        </div>
+      </div>
+    </section>
+  );
+}
+
+
 /* ---------------- Footer ---------------- */
 function Footer() {
   return (
