@@ -655,7 +655,7 @@ function Payments() {
         <SectionHeader
           eyebrow="Checkout"
           title="Pay your way."
-          subtitle="Three easy options. Lock in your order over text — we'll confirm payment details before the driver rolls out."
+          sub="Three easy options. Lock in your order over text — we'll confirm payment details before the driver rolls out."
         />
         <div className="grid md:grid-cols-3 gap-5 mt-12">
           {methods.map((m) => (
