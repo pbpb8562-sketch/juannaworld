@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import logo from "@/assets/juanna-world-logo.png.asset.json";
-const ORB_IMG_URL = "/__l5e/assets-v1/aee2603f-f0ab-4e73-a78e-0f01ee83820f/boutiq-v5-orb.png";
+const ORB_IMG_URL = "/boutiq-v5-orb.png";
 
 const PHONE_RAW = "3156771426";
 const PHONE_DISPLAY = "(315) 677-1426";
