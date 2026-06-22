@@ -254,7 +254,7 @@ function Hero() {
           </h1>
           <p className="mt-5 text-lg text-muted-foreground max-w-lg">
             Flower, non-CRC live resin, Hashers Anonymous live rosin, and Boutiq V5 disposables.
-            Discreet, fast, and curated by people who actually smoke.
+            Discreet, fast, and curated by smokers for the smokers.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <a
