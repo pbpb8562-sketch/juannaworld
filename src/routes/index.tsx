@@ -706,7 +706,7 @@ function Payments() {
         </div>
         <div className="mt-8 rounded-2xl border border-border/60 bg-card/30 p-5 text-xs text-muted-foreground text-center">
           Digital payments must be sent as <span className="text-foreground font-semibold">Friends & Family</span> with
-          no product references. Orders ship after payment is confirmed (COD excluded).
+          no product references. Orders are on the way after payment is confirmed (COD excluded).
         </div>
       </div>
     </section>
