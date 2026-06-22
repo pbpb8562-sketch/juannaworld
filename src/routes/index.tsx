@@ -50,6 +50,7 @@ function Home() {
       <Menu />
       <Orbs />
       <Wholesale />
+      <Payments />
       <Verify />
       <Footer />
     </div>
