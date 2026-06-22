@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import logo from "@/assets/juanna-world-logo.png.asset.json";
+import orbImg from "@/assets/boutiq-v5-orb.png.asset.json";
 
 const PHONE_RAW = "3156771426";
 const PHONE_DISPLAY = "(315) 677-1426";
@@ -189,10 +190,7 @@ function Hero() {
     <section id="top" className="relative bg-hero">
       <div className="max-w-6xl mx-auto px-5 pt-14 pb-20 md:pt-24 md:pb-32 grid md:grid-cols-2 gap-10 items-center">
         <div>
-          <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-3 py-1 text-xs font-medium text-muted-foreground">
-            <span className="w-2 h-2 rounded-full bg-secondary pulse-ring" />
-            Delivering · 35 mi around Cortland, NY
-          </span>
+          <DeliveryStatus />
           <h1 className="mt-5 text-5xl md:text-7xl font-extrabold leading-[0.95]">
             Top-shelf <span className="text-gradient-flame">delivered</span> to your door.
           </h1>
@@ -432,15 +430,14 @@ function Orbs() {
       <div className="max-w-6xl mx-auto px-5 grid md:grid-cols-2 gap-12 items-center">
         <div>
           <SectionHeader
-            eyebrow="Vapes · California Drop"
+            eyebrow="Vapes"
             title="Boutiq V5 Orbs"
             sub="$50 each — 2g all-in-one disposable vape."
           />
           <div className="mt-6 space-y-4 text-muted-foreground">
             <p>
               <strong className="text-foreground">What they are:</strong> The Boutiq V5 Orb is a
-              fully <strong className="text-foreground">disposable 2-gram vape</strong> out of
-              California — no cart, no battery to charge separately, no buttons. You pull straight
+              fully <strong className="text-foreground">disposable 2-gram vape</strong> — no cart, no battery to charge separately, no buttons. You pull straight
               from the device and toss it when it's done.
             </p>
             <p>
@@ -453,10 +450,6 @@ function Orbs() {
             <p>
               Translation: <em className="text-foreground">discreet, potent, full-flavor — open
               the box, rip it, throw it away when empty.</em>
-            </p>
-            <p className="text-xs">
-              Info sourced from California Boutiq retail listings (see dispensary menus like
-              Cookies, Catalyst, and Embarc for the V-series product line).
             </p>
           </div>
           <div className="mt-6 flex flex-wrap gap-3">
@@ -476,18 +469,15 @@ function Orbs() {
             </a>
           </div>
         </div>
-        <div className="relative aspect-square max-w-md mx-auto w-full">
+        <div className="relative max-w-md mx-auto w-full">
           <div className="absolute inset-0 bg-gradient-to-br from-accent/30 via-primary/20 to-secondary/30 rounded-full blur-3xl" />
-          <div className="relative w-full h-full rounded-3xl border border-border bg-background/40 backdrop-blur flex items-center justify-center overflow-hidden">
-            <div className="relative w-3/4 h-3/4">
-              <Orb className="absolute top-4 left-6 w-24 h-24" hue="orange" />
-              <Orb className="absolute bottom-6 right-4 w-32 h-32" hue="green" />
-              <Orb className="absolute top-1/3 right-10 w-20 h-20" hue="amber" />
-              <Orb className="absolute bottom-10 left-8 w-16 h-16" hue="rose" />
-            </div>
-            <div className="absolute top-4 left-4 rounded-full bg-background/70 backdrop-blur border border-border text-xs font-semibold px-3 py-1.5">
-              2g Disposable · CA
-            </div>
+          <div className="relative rounded-3xl border border-border bg-background/40 backdrop-blur overflow-hidden">
+            <img
+              src={orbImg.url}
+              alt="Boutiq V5 Orb 2g disposable vape"
+              className="w-full h-auto object-cover"
+              loading="lazy"
+            />
             <div className="absolute bottom-4 right-4 rounded-full bg-primary text-primary-foreground text-sm font-bold px-4 py-2 shadow-glow">
               $50 / orb
             </div>
@@ -495,24 +485,6 @@ function Orbs() {
         </div>
       </div>
     </section>
-  );
-}
-
-function Orb({ className, hue }: { className?: string; hue: string }) {
-  const colors: Record<string, string> = {
-    orange: "from-orange-300 via-orange-500 to-red-700",
-    green: "from-lime-200 via-emerald-500 to-emerald-900",
-    amber: "from-amber-200 via-amber-500 to-orange-800",
-    rose: "from-pink-200 via-rose-400 to-rose-800",
-  };
-  return (
-    <div
-      className={`rounded-full bg-gradient-to-br ${colors[hue]} shadow-2xl ring-1 ring-white/20 ${className}`}
-      style={{
-        boxShadow:
-          "inset -8px -10px 20px rgba(0,0,0,0.45), inset 8px 8px 14px rgba(255,255,255,0.25), 0 12px 30px rgba(0,0,0,0.5)",
-      }}
-    />
   );
 }
 
