@@ -531,7 +531,7 @@ function Orbs() {
           <div className="absolute inset-0 bg-gradient-to-br from-accent/30 via-primary/20 to-secondary/30 rounded-full blur-3xl" />
           <div className="relative rounded-3xl border border-border bg-background/40 backdrop-blur overflow-hidden">
             <img
-              src={orbImg.url}
+              src={ORB_IMG_URL}
               alt="Boutiq V5 Orb 2g disposable vape"
               className="w-full h-auto object-cover"
               loading="lazy"
