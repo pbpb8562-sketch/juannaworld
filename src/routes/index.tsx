@@ -12,6 +12,64 @@ const TEL_HREF = `tel:+1${PHONE_RAW}`;
 const ACCESS_PASSWORD = "Juannaw0r1d";
 const ORBS_REEL = "https://www.instagram.com/reel/DTgMihvkixY/?igsh=d2JrM2o3ZjA0MTl0";
 
+function DeliveryStatus() {
+  const [status, setStatus] = useState<"open" | "preorder" | "closed">("closed");
+  const [label, setLabel] = useState("");
+
+  useEffect(() => {
+    const now = new Date();
+    const hour = now.getHours();
+    const day = now.getDay();
+    const isWeekday = day >= 1 && day <= 6;
+
+    if (isWeekday && hour >= 10 && hour < 18) {
+      setStatus("open");
+      setLabel("Delivering Now · 10am–6pm");
+    } else if (day === 0) {
+      setStatus("preorder");
+      setLabel("Sunday Preorders · Text to schedule");
+    } else {
+      setStatus("closed");
+      const nextOpen = isWeekday && hour >= 18 ? "tomorrow at 10am" : "10am";
+      setLabel(`Closed · Back ${nextOpen}`);
+    }
+  }, []);
+
+  const dotColor =
+    status === "open"
+      ? "bg-emerald-400"
+      : status === "preorder"
+        ? "bg-amber-400"
+        : "bg-muted-foreground";
+
+  const glow =
+    status === "open"
+      ? "shadow-[0_0_12px_rgba(52,211,153,0.6)]"
+      : status === "preorder"
+        ? "shadow-[0_0_12px_rgba(251,191,36,0.5)]"
+        : "";
+
+  return (
+    <span className="inline-flex items-center gap-2.5 rounded-full border border-border bg-card/60 px-3.5 py-1.5 text-xs font-medium text-muted-foreground">
+      <span
+        className={`relative flex h-2.5 w-2.5 ${status === "open" ? "animate-pulse" : ""}`}
+      >
+        <span
+          className={`absolute inline-flex h-full w-full rounded-full ${dotColor} opacity-75 ${glow}`}
+          style={
+            status === "open"
+              ? { animation: "pulse-ring 2s cubic-bezier(0.4,0,0.6,1) infinite" }
+              : undefined
+          }
+        />
+        <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${dotColor}`} />
+      </span>
+      <span className="text-foreground font-semibold">{label}</span>
+      <span className="hidden sm:inline text-muted-foreground">· Mon–Sat 10am–6pm</span>
+    </span>
+  );
+}
+
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
