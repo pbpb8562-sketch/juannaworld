@@ -169,6 +169,7 @@ function Nav() {
           <a href="#menu" className="hover:text-foreground transition">Menu</a>
           <a href="#orbs" className="hover:text-foreground transition">Orbs</a>
           <a href="#wholesale" className="hover:text-foreground transition">Wholesale</a>
+          <a href="#payments" className="hover:text-foreground transition">Payment</a>
           <a href="#verify" className="hover:text-foreground transition">Verify</a>
         </nav>
         <a
