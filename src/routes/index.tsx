@@ -672,7 +672,7 @@ function Payments() {
     },
     {
       name: "Cash on Delivery",
-      tag: "Exact change preferred",
+      tag: "Exact change preferred Must Have Extra Verification",
       d: "Pay your driver in cash at the door. Have ID ready (21+). Tips appreciated and go straight to the driver.",
       accent: "from-amber-400 to-orange-600",
       icon: "$",
