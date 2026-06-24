@@ -120,7 +120,7 @@ function Home() {
   };
 
   if (!unlocked) return <Gate onUnlock={() => setUnlocked(true)} />;
-  if (!user) return <AccountGate onAuth={(u) => setUser(u)} />;
+  if (!user) return <AccountGate onAuth={(u: string) => setUser(u)} />;
 
   return (
     <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
