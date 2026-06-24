@@ -1063,6 +1063,7 @@ function Eligibility() {
 /* ---------------- Order Message (text the kitchen) ---------------- */
 function OrderMessage({ user }: { user: string }) {
   const [address, setAddress] = useState("");
+  const [phone, setPhone] = useState("");
   const [message, setMessage] = useState("");
   const [sent, setSent] = useState(false);
   const [orders, setOrders] = useState<StoredOrder[]>([]);
@@ -1075,6 +1076,11 @@ function OrderMessage({ user }: { user: string }) {
   const send = (e: React.FormEvent) => {
     e.preventDefault();
     if (message.trim().length < 5) return;
+    const cleanPhone = phone.replace(/\D/g, "");
+    if (cleanPhone.length < 10) {
+      alert("Please enter your phone number — required for rewards points.");
+      return;
+    }
     const order: StoredOrder = {
       id: Math.random().toString(36).slice(2, 10),
       at: Date.now(),
@@ -1089,6 +1095,7 @@ function OrderMessage({ user }: { user: string }) {
     }
     const body =
       `Juanna World order from @${user}\n\n` +
+      `Phone (for rewards points): ${cleanPhone}\n` +
       `Address: ${address.trim() || "(not provided)"}\n\n` +
       `Order: ${message.trim()}`;
     const href = `sms:+1${PHONE_RAW}?&body=${encodeURIComponent(body)}`;
@@ -1096,6 +1103,8 @@ function OrderMessage({ user }: { user: string }) {
     setSent(true);
     setMessage("");
   };
+
+
 
   return (
     <section id="order" className="py-20 md:py-24 border-t border-border">
