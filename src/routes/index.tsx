@@ -237,10 +237,10 @@ function Gate({ onUnlock }: { onUnlock: () => void }) {
 }
 
 /* ---------------- Nav ---------------- */
-function Nav() {
+function Nav({ user, onSignOut }: { user: string; onSignOut: () => void }) {
   return (
     <header className="sticky top-0 z-40 backdrop-blur-xl bg-background/70 border-b border-border">
-      <div className="max-w-6xl mx-auto px-5 py-3 flex items-center justify-between">
+      <div className="max-w-6xl mx-auto px-5 py-3 flex items-center justify-between gap-3">
         <a href="#top" className="flex items-center gap-2">
           <img src={logo.url} alt="" className="w-10 h-10" />
           <span className="font-display font-extrabold text-lg tracking-tight">
@@ -248,18 +248,23 @@ function Nav() {
           </span>
         </a>
         <nav className="hidden md:flex items-center gap-7 text-sm text-muted-foreground">
+          <a href="#eligibility" className="hover:text-foreground transition">Delivery</a>
           <a href="#menu" className="hover:text-foreground transition">Menu</a>
           <a href="#orbs" className="hover:text-foreground transition">Orbs</a>
-          <a href="#wholesale" className="hover:text-foreground transition">Wholesale</a>
           <a href="#payments" className="hover:text-foreground transition">Payment</a>
-          <a href="#verify" className="hover:text-foreground transition">Verify</a>
+          <a href="#order" className="hover:text-foreground transition">Order</a>
         </nav>
-        <a
-          href={SMS_HREF}
-          className="rounded-full bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold hover:opacity-90 transition shadow-glow"
-        >
-          Text to Order
-        </a>
+        <div className="flex items-center gap-2">
+          <span className="hidden sm:inline text-xs text-muted-foreground">
+            Hi, <span className="text-foreground font-semibold">{user}</span>
+          </span>
+          <button
+            onClick={onSignOut}
+            className="rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold hover:bg-muted transition"
+          >
+            Sign out
+          </button>
+        </div>
       </div>
     </header>
   );
