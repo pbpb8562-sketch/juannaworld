@@ -12,6 +12,18 @@ const TEL_HREF = `tel:+1${PHONE_RAW}`;
 const ACCESS_PASSWORD = "Juannaw0r1d";
 const ORBS_REEL = "https://www.instagram.com/reel/DVqlymUDLJi/?igsh=d2NucTRkMWU5b3Fh";
 
+// Support number for password resets (different from order line)
+const SUPPORT_RAW = "3256771426";
+const SUPPORT_DISPLAY = "(325) 677-1426";
+const SUPPORT_SMS = `sms:+1${SUPPORT_RAW}?&body=${encodeURIComponent(
+  "Juanna World — password reset request. My username: ",
+)}`;
+
+// Planet Fitness, Cortland NY (819 NY-13) — delivery origin
+const ORIGIN_LAT = 42.5876;
+const ORIGIN_LNG = -76.1518;
+const DELIVERY_RADIUS_MI = 40;
+
 function DeliveryStatus() {
   const [status, setStatus] = useState<"open" | "preorder" | "closed">("closed");
   const [label, setLabel] = useState("");
