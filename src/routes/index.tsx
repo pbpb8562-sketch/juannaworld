@@ -1114,10 +1114,37 @@ function OrderMessage({ user }: { user: string }) {
           title="Send your order straight to us."
           sub={`Type what you want and your address — we'll text you back at the verified number to confirm. Goes to ${PHONE_DISPLAY}.`}
         />
+        <div className="mt-8 rounded-3xl border border-primary/40 bg-gradient-to-br from-primary/15 to-secondary/10 p-6 shadow-glow">
+          <div className="text-xs uppercase tracking-[0.25em] text-secondary font-semibold">
+            Rewards Program
+          </div>
+          <h3 className="mt-2 text-2xl font-display font-extrabold">
+            Earn 1 point for every $5 spent.
+          </h3>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Hit <span className="text-foreground font-semibold">100 points ($500 spent)</span> and
+            pick a reward from our rewards list. Points are tracked by phone number and added
+            manually every day — <span className="text-foreground font-semibold">you must include
+            your phone number in the order notes below</span> to get credit.
+          </p>
+        </div>
         <form
           onSubmit={send}
-          className="mt-8 rounded-3xl border border-border bg-card p-6 shadow-card space-y-4"
+          className="mt-6 rounded-3xl border border-border bg-card p-6 shadow-card space-y-4"
         >
+          <div>
+            <label className="text-xs uppercase tracking-[0.2em] text-muted-foreground font-semibold">
+              Phone number <span className="text-primary">(required for rewards)</span>
+            </label>
+            <input
+              type="tel"
+              inputMode="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="(315) 555-0123"
+              className="mt-2 w-full rounded-xl bg-background border border-border px-4 py-3 outline-none focus:border-primary transition"
+            />
+          </div>
           <div>
             <label className="text-xs uppercase tracking-[0.2em] text-muted-foreground font-semibold">
               Delivery address
