@@ -340,174 +340,132 @@ function Stats() {
   );
 }
 
-/* ---------------- Menu ---------------- */
-type Tier = {
-  name: string;
-  tag: string;
-  oz?: string;
-  lb?: string;
-  vibe: string;
-  highlight?: boolean;
+/* ---------------- Dynamic Menu (Auto-updates from Google Doc every 2 hours) ---------------- */
+type MenuSection = {
+  title: string;
+  description?: string;
+  items: Array<{
+    name: string;
+    price?: string;
+    desc?: string;
+    strains?: string[];
+    soldOut?: boolean;
+    isOrbs?: boolean;
+  }>;
 };
 
-const flower: Tier[] = [
-  {
-    name: "Top Shelf",
-    tag: "Tier 1",
-    oz: "$120",
-    lb: "$1,400",
-    vibe: "Loud, hand-trimmed, exotic strain rotation.",
-    highlight: true,
-  },
-  {
-    name: "Mid Shelf",
-    tag: "Tier 2",
-    oz: "$100",
-    lb: "$1,200",
-    vibe: "Strong daily-driver flower at a working price.",
-  },
-  {
-    name: "Pound Special",
-    tag: "Tier 3",
-    lb: "$900",
-    vibe: "Bulk price. Solid smoke, unbeatable per-gram.",
-  },
-];
+const GOOGLE_DOC_URL = "https://docs.google.com/document/u/2/d/1-L_txxNtkd_cHb08kQMO7FpLn-tk9wXM4lo7wcK5DdE/export?format=txt";
 
-const concentrates = [
-  {
-    name: "Non-CRC Live Resin",
-    sub: "Full-spectrum, no color remediation",
-    price: "$120",
-    unit: "/ oz",
-    desc: "Pure terps, real color, real flavor. Nothing stripped out.",
-  },
-  {
-    name: "Hashers Anonymous Live Rosin",
-    sub: "Solventless · cold-cured",
-    tiers: [
-      { q: "1g", p: "$50" },
-      { q: "7g", p: "$275" },
-      { q: "14g", p: "$525" },
-      { q: "28g", p: "$1,000" },
-    ],
-    desc: "Top-tier solventless rosin pressed from top-tier hash.",
-  },
-];
+async function fetchAndParseMenu(): Promise<MenuSection[]> {
+  try {
+    const res = await fetch(GOOGLE_DOC_URL + "&t=" + Date.now());
+    if (!res.ok) throw new Error("Failed");
+    const text = await res.text();
+
+    const sections: MenuSection[] = [];
+    const lines = text.split('\n');
+    let current: MenuSection | null = null;
+
+    for (let rawLine of lines) {
+      const line = rawLine.trim();
+      if (!line) continue;
+
+      if (line.startsWith('[') && line.endsWith(']')) {
+        if (current) sections.push(current);
+        current = { title: line.slice(1, -1).trim(), items: [] };
+        continue;
+      }
+
+      if (!current) continue;
+
+      if (line.includes('|')) {
+        const parts = line.split('|').map(p => p.trim());
+        current.items.push({
+          name: parts[0],
+          price: parts[1],
+          desc: parts[2],
+        });
+      } else if (line.toLowerCase().includes("strains:")) {
+        const strainsText = line.replace(/strains?:/i, '').trim();
+        if (current.items.length > 0) {
+          current.items[current.items.length - 1].strains = strainsText.split(',').map(s => s.trim());
+        }
+      } else if (line.toLowerCase().includes("sold out")) {
+        if (current.items.length > 0) {
+          current.items[current.items.length - 1].soldOut = true;
+        }
+      } else if (current.title.toLowerCase().includes("vapes") || current.title.toLowerCase().includes("orbs")) {
+        current.items.push({ name: line, isOrbs: true });
+      } else if (!current.description) {
+        current.description = line;
+      }
+    }
+
+    if (current) sections.push(current);
+    return sections.length > 0 ? sections : getFallbackMenu();
+  } catch (e) {
+    console.error("Menu fetch failed:", e);
+    return getFallbackMenu();
+  }
+}
+
+function getFallbackMenu(): MenuSection[] {
+  return [{
+    title: "TIER 1 - TOP SHELF",
+    description: "Loud, hand-trimmed, exotic strain rotation.",
+    items: [{ name: "Loading live menu from Google Doc..." }]
+  }];
+}
 
 function Menu() {
+  const [menuData, setMenuData] = useState<MenuSection[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchAndParseMenu().then(data => {
+      setMenuData(data);
+      setLoading(false);
+    });
+  }, []);
+
+  // Auto-refresh every 2 hours
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchAndParseMenu().then(data => {
+        if (data.length > 0) setMenuData(data);
+      });
+    }, 2 * 60 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <section id="menu" className="py-20 md:py-28">
       <div className="max-w-6xl mx-auto px-5">
         <SectionHeader
           eyebrow="The Menu"
-          title="Flower, in three tiers."
-          sub="Three quality levels. Pick your price, we'll bring the heat."
+          title="Live Menu • Updates Every 2 Hours"
+          sub="Parsed directly from our master Google Doc. Always current."
         />
-        <div className="mt-10 grid md:grid-cols-3 gap-5">
-          {flower.map((t) => (
-            <div
-              key={t.name}
-              className={`relative rounded-3xl border p-7 shadow-card transition hover:-translate-y-1 ${
-                t.highlight
-                  ? "bg-gradient-to-br from-primary/15 to-secondary/10 border-primary/40"
-                  : "bg-card border-border"
-              }`}
-            >
-              {t.highlight && (
-                <span className="absolute -top-3 left-7 rounded-full bg-primary text-primary-foreground text-[10px] font-bold uppercase tracking-widest px-3 py-1">
-                  Most Loved
-                </span>
-              )}
-              <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                {t.tag}
-              </div>
-              <h3 className="mt-2 text-2xl">{t.name}</h3>
-              <p className="mt-2 text-sm text-muted-foreground">{t.vibe}</p>
-              <div className="mt-6 space-y-2 border-t border-border pt-4">
-                {t.oz && <Row label="Ounce" value={t.oz} />}
-                {t.lb && <Row label="Pound" value={t.lb} />}
-              </div>
-            </div>
-          ))}
-        </div>
 
-        <div className="mt-16 grid lg:grid-cols-2 gap-5">
-          {concentrates.map((c) => (
-            <div
-              key={c.name}
-              className="rounded-3xl border border-border bg-card p-7 shadow-card"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h3 className="text-2xl">{c.name}</h3>
-                  <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground mt-1">
-                    {c.sub}
-                  </div>
+        <div className="mt-12 space-y-16">
+          {loading ? (
+            <div className="text-center py-20">Loading latest menu...</div>
+          ) : (
+            menuData.map((section, idx) => (
+              <div key={idx}>
+                <div className="mb-8">
+                  <h3 className="text-3xl font-display font-extrabold tracking-tight">{section.title}</h3>
+                  {section.description && <p className="mt-3 text-muted-foreground text-lg">{section.description}</p>}
                 </div>
-                {"price" in c && c.price && (
-                  <div className="text-right shrink-0">
-                    <div className="text-3xl font-display font-extrabold text-gradient-flame">
-                      {c.price}
-                    </div>
-                    <div className="text-xs text-muted-foreground">{c.unit}</div>
-                  </div>
-                )}
-              </div>
-              <p className="mt-3 text-sm text-muted-foreground">{c.desc}</p>
-              {"tiers" in c && c.tiers && (
-                <div className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {c.tiers.map((t) => (
+
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {section.items.map((item, i) => (
                     <div
-                      key={t.q}
-                      className="rounded-xl border border-border bg-background/40 p-3 text-center"
+                      key={i}
+                      className={`group rounded-3xl border p-7 shadow-card transition-all hover:-translate-y-1 hover:shadow-xl ${item.soldOut ? 'opacity-75' : 'hover:border-primary/50'}`}
                     >
-                      <div className="text-xs uppercase tracking-widest text-muted-foreground">
-                        {t.q}
-                      </div>
-                      <div className="text-lg font-display font-extrabold text-foreground mt-1">
-                        {t.p}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between">
-      <span className="text-sm text-muted-foreground">{label}</span>
-      <span className="font-display font-extrabold text-lg text-foreground">{value}</span>
-    </div>
-  );
-}
-
-function SectionHeader({
-  eyebrow,
-  title,
-  sub,
-}: {
-  eyebrow: string;
-  title: string;
-  sub?: string;
-}) {
-  return (
-    <div className="max-w-2xl">
-      <div className="text-xs uppercase tracking-[0.25em] text-secondary font-semibold">
-        {eyebrow}
-      </div>
-      <h2 className="mt-3 text-4xl md:text-5xl font-extrabold leading-tight">{title}</h2>
-      {sub && <p className="mt-3 text-muted-foreground">{sub}</p>}
-    </div>
-  );
-}
+                      {item.soldOut && (
+                        <div className="inline-block mb-3 rounded-full bg-red-500/10 px-3 py-1
 
 /* ---------------- Orbs (2g Disposable Vape) ---------------- */
 function Orbs() {
