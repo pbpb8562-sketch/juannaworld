@@ -105,23 +105,34 @@ export const Route = createFileRoute("/")({
 
 function Home() {
   const [unlocked, setUnlocked] = useState(false);
+  const [user, setUser] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (sessionStorage.getItem("jw_unlocked") === "1") setUnlocked(true);
+    const u = sessionStorage.getItem("jw_user");
+    if (u) setUser(u);
   }, []);
 
+  const signOut = () => {
+    sessionStorage.removeItem("jw_user");
+    setUser(null);
+  };
+
   if (!unlocked) return <Gate onUnlock={() => setUnlocked(true)} />;
+  if (!user) return <AccountGate onAuth={(u) => setUser(u)} />;
 
   return (
     <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
-      <Nav />
+      <Nav user={user} onSignOut={signOut} />
       <Hero />
+      <Eligibility />
       <Stats />
       <Menu />
       <Orbs />
       <Wholesale />
       <Payments />
+      <OrderMessage user={user} />
       <Verify />
       <Footer />
     </div>
