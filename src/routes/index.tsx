@@ -12,6 +12,18 @@ const TEL_HREF = `tel:+1${PHONE_RAW}`;
 const ACCESS_PASSWORD = "Juannaw0r1d";
 const ORBS_REEL = "https://www.instagram.com/reel/DVqlymUDLJi/?igsh=d2NucTRkMWU5b3Fh";
 
+// Support number for password resets (different from order line)
+const SUPPORT_RAW = "3256771426";
+const SUPPORT_DISPLAY = "(325) 677-1426";
+const SUPPORT_SMS = `sms:+1${SUPPORT_RAW}?&body=${encodeURIComponent(
+  "Juanna World — password reset request. My username: ",
+)}`;
+
+// Planet Fitness, Cortland NY (819 NY-13) — delivery origin
+const ORIGIN_LAT = 42.5876;
+const ORIGIN_LNG = -76.1518;
+const DELIVERY_RADIUS_MI = 40;
+
 function DeliveryStatus() {
   const [status, setStatus] = useState<"open" | "preorder" | "closed">("closed");
   const [label, setLabel] = useState("");
@@ -93,23 +105,34 @@ export const Route = createFileRoute("/")({
 
 function Home() {
   const [unlocked, setUnlocked] = useState(false);
+  const [user, setUser] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (sessionStorage.getItem("jw_unlocked") === "1") setUnlocked(true);
+    const u = sessionStorage.getItem("jw_user");
+    if (u) setUser(u);
   }, []);
 
+  const signOut = () => {
+    sessionStorage.removeItem("jw_user");
+    setUser(null);
+  };
+
   if (!unlocked) return <Gate onUnlock={() => setUnlocked(true)} />;
+  if (!user) return <AccountGate onAuth={(u: string) => setUser(u)} />;
 
   return (
     <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
-      <Nav />
+      <Nav user={user} onSignOut={signOut} />
       <Hero />
+      <Eligibility />
       <Stats />
       <Menu />
       <Orbs />
       <Wholesale />
       <Payments />
+      <OrderMessage user={user} />
       <Verify />
       <Footer />
     </div>
@@ -214,10 +237,10 @@ function Gate({ onUnlock }: { onUnlock: () => void }) {
 }
 
 /* ---------------- Nav ---------------- */
-function Nav() {
+function Nav({ user, onSignOut }: { user: string; onSignOut: () => void }) {
   return (
     <header className="sticky top-0 z-40 backdrop-blur-xl bg-background/70 border-b border-border">
-      <div className="max-w-6xl mx-auto px-5 py-3 flex items-center justify-between">
+      <div className="max-w-6xl mx-auto px-5 py-3 flex items-center justify-between gap-3">
         <a href="#top" className="flex items-center gap-2">
           <img src={logo.url} alt="" className="w-10 h-10" />
           <span className="font-display font-extrabold text-lg tracking-tight">
@@ -225,18 +248,23 @@ function Nav() {
           </span>
         </a>
         <nav className="hidden md:flex items-center gap-7 text-sm text-muted-foreground">
+          <a href="#eligibility" className="hover:text-foreground transition">Delivery</a>
           <a href="#menu" className="hover:text-foreground transition">Menu</a>
           <a href="#orbs" className="hover:text-foreground transition">Orbs</a>
-          <a href="#wholesale" className="hover:text-foreground transition">Wholesale</a>
           <a href="#payments" className="hover:text-foreground transition">Payment</a>
-          <a href="#verify" className="hover:text-foreground transition">Verify</a>
+          <a href="#order" className="hover:text-foreground transition">Order</a>
         </nav>
-        <a
-          href={SMS_HREF}
-          className="rounded-full bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold hover:opacity-90 transition shadow-glow"
-        >
-          Text to Order
-        </a>
+        <div className="flex items-center gap-2">
+          <span className="hidden sm:inline text-xs text-muted-foreground">
+            Hi, <span className="text-foreground font-semibold">{user}</span>
+          </span>
+          <button
+            onClick={onSignOut}
+            className="rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold hover:bg-muted transition"
+          >
+            Sign out
+          </button>
+        </div>
       </div>
     </header>
   );
@@ -749,5 +777,403 @@ function Footer() {
         </div>
       </div>
     </footer>
+  );
+}
+
+/* ---------------- Account Gate (signup / login) ---------------- */
+type Account = { password: string; createdAt: number; orders: StoredOrder[] };
+type StoredOrder = { id: string; at: number; message: string; address: string };
+
+function loadAccounts(): Record<string, Account> {
+  try {
+    return JSON.parse(localStorage.getItem("jw_accounts") || "{}");
+  } catch {
+    return {};
+  }
+}
+function saveAccounts(a: Record<string, Account>) {
+  localStorage.setItem("jw_accounts", JSON.stringify(a));
+}
+
+async function hashPw(pw: string): Promise<string> {
+  const buf = new TextEncoder().encode(pw + "::jw-salt-v1");
+  const digest = await crypto.subtle.digest("SHA-256", buf);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function AccountGate({ onAuth }: { onAuth: (username: string) => void }) {
+  const [mode, setMode] = useState<"login" | "signup">("login");
+  const [username, setUsername] = useState("");
+  const [pw, setPw] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErr(null);
+    const u = username.trim().toLowerCase();
+    if (!u || u.length < 3) return setErr("Username must be at least 3 characters.");
+    if (!/^[a-z0-9_.-]+$/.test(u))
+      return setErr("Letters, numbers, dot, dash, underscore only.");
+    if (pw.length < 6) return setErr("Password must be at least 6 characters.");
+
+    setBusy(true);
+    try {
+      const accounts = loadAccounts();
+      const hashed = await hashPw(pw);
+      if (mode === "signup") {
+        if (accounts[u]) {
+          setErr("That username already exists. Try logging in.");
+          return;
+        }
+        accounts[u] = { password: hashed, createdAt: Date.now(), orders: [] };
+        saveAccounts(accounts);
+      } else {
+        if (!accounts[u] || accounts[u].password !== hashed) {
+          setErr("Wrong username or password.");
+          return;
+        }
+      }
+      sessionStorage.setItem("jw_user", u);
+      onAuth(u);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-hero text-foreground flex flex-col">
+      <div className="flex-1 flex items-center justify-center px-5 py-12">
+        <div className="w-full max-w-md">
+          <div className="text-center">
+            <img src={logo.url} alt="Juanna World" className="w-24 h-24 mx-auto drop-shadow-2xl" />
+            <h1 className="mt-5 text-3xl md:text-4xl font-extrabold">
+              {mode === "signup" ? "Create your account" : "Welcome back"}
+            </h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Your account stores your order history & info on this device.
+            </p>
+          </div>
+
+          <form
+            onSubmit={submit}
+            className="mt-8 rounded-3xl border border-border bg-card p-6 shadow-card space-y-4"
+          >
+            <div>
+              <label className="text-xs uppercase tracking-[0.2em] text-muted-foreground font-semibold">
+                Username
+              </label>
+              <input
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                autoComplete="username"
+                placeholder="yourname"
+                className="mt-2 w-full rounded-xl bg-background border border-border px-4 py-3 outline-none focus:border-primary transition"
+              />
+            </div>
+            <div>
+              <label className="text-xs uppercase tracking-[0.2em] text-muted-foreground font-semibold">
+                Password
+              </label>
+              <input
+                type="password"
+                value={pw}
+                onChange={(e) => setPw(e.target.value)}
+                autoComplete={mode === "signup" ? "new-password" : "current-password"}
+                placeholder="••••••••"
+                className="mt-2 w-full rounded-xl bg-background border border-border px-4 py-3 outline-none focus:border-primary transition"
+              />
+            </div>
+            {err && <p className="text-sm text-red-400">{err}</p>}
+            <button
+              type="submit"
+              disabled={busy}
+              className="w-full rounded-full bg-primary text-primary-foreground font-semibold py-3 shadow-glow hover:opacity-90 transition disabled:opacity-60"
+            >
+              {busy ? "..." : mode === "signup" ? "Create account" : "Log in"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setErr(null);
+                setMode(mode === "signup" ? "login" : "signup");
+              }}
+              className="w-full text-xs text-muted-foreground hover:text-foreground transition"
+            >
+              {mode === "signup"
+                ? "Already have an account? Log in"
+                : "New here? Create an account"}
+            </button>
+          </form>
+
+          <div className="mt-5 rounded-2xl border border-border bg-card/60 p-5 text-center">
+            <div className="text-xs uppercase tracking-[0.2em] text-secondary font-semibold">
+              Forgot password?
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Text our support line and we'll get you back in.
+            </p>
+            <a
+              href={SUPPORT_SMS}
+              className="mt-3 inline-block rounded-full bg-secondary text-secondary-foreground font-semibold px-5 py-2.5 text-sm hover:opacity-90 transition"
+            >
+              Text Support · {SUPPORT_DISPLAY}
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Eligibility (distance from Planet Fitness Cortland) ---------------- */
+function haversineMiles(
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number,
+): number {
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const R = 3958.7613;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+function Eligibility() {
+  const [addr, setAddr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<
+    | { ok: true; miles: number; label: string; eligible: boolean }
+    | { ok: false; error: string }
+    | null
+  >(null);
+
+  const check = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const q = addr.trim();
+    if (q.length < 5) {
+      setResult({ ok: false, error: "Please enter a full street address." });
+      return;
+    }
+    setBusy(true);
+    setResult(null);
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&q=${encodeURIComponent(q)}`;
+      const res = await fetch(url, { headers: { Accept: "application/json" } });
+      const data = (await res.json()) as Array<{
+        lat: string;
+        lon: string;
+        display_name: string;
+      }>;
+      if (!data.length) {
+        setResult({ ok: false, error: "Couldn't find that address. Try adding city + state." });
+        return;
+      }
+      const lat = parseFloat(data[0].lat);
+      const lng = parseFloat(data[0].lon);
+      const miles = haversineMiles(ORIGIN_LAT, ORIGIN_LNG, lat, lng);
+      setResult({
+        ok: true,
+        miles,
+        label: data[0].display_name,
+        eligible: miles <= DELIVERY_RADIUS_MI,
+      });
+    } catch {
+      setResult({ ok: false, error: "Network error. Try again in a sec." });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section id="eligibility" className="py-16 md:py-20 border-b border-border">
+      <div className="max-w-3xl mx-auto px-5">
+        <SectionHeader
+          eyebrow="Delivery Check"
+          title="Are you in our zone?"
+          sub={`We deliver within ${DELIVERY_RADIUS_MI} miles of Planet Fitness in Cortland, NY. Drop your address to see if we can roll to you.`}
+        />
+        <form
+          onSubmit={check}
+          className="mt-8 rounded-3xl border border-border bg-card p-5 md:p-6 shadow-card"
+        >
+          <div className="flex flex-col sm:flex-row gap-3">
+            <input
+              value={addr}
+              onChange={(e) => setAddr(e.target.value)}
+              placeholder="123 Main St, Cortland, NY"
+              className="flex-1 rounded-xl bg-background border border-border px-4 py-3 outline-none focus:border-primary transition"
+            />
+            <button
+              type="submit"
+              disabled={busy}
+              className="rounded-full bg-primary text-primary-foreground font-semibold px-6 py-3 shadow-glow hover:opacity-90 transition disabled:opacity-60"
+            >
+              {busy ? "Checking..." : "Check delivery"}
+            </button>
+          </div>
+          {result && (
+            <div
+              className={`mt-5 rounded-2xl border p-4 text-sm ${
+                result.ok
+                  ? result.eligible
+                    ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-100"
+                    : "border-amber-500/40 bg-amber-500/10 text-amber-100"
+                  : "border-red-500/40 bg-red-500/10 text-red-200"
+              }`}
+            >
+              {result.ok ? (
+                result.eligible ? (
+                  <>
+                    <div className="font-display font-extrabold text-lg">
+                      ✓ You're in. {result.miles.toFixed(1)} mi away.
+                    </div>
+                    <div className="opacity-80 mt-1 text-xs">{result.label}</div>
+                  </>
+                ) : (
+                  <>
+                    <div className="font-display font-extrabold text-lg">
+                      Out of zone — {result.miles.toFixed(1)} mi away.
+                    </div>
+                    <div className="opacity-80 mt-1 text-xs">
+                      We only deliver within {DELIVERY_RADIUS_MI} mi of Cortland.
+                    </div>
+                  </>
+                )
+              ) : (
+                <div>{result.error}</div>
+              )}
+            </div>
+          )}
+          <p className="mt-3 text-[11px] text-muted-foreground">
+            Address lookup via OpenStreetMap. Your address isn't saved unless you add it to an order.
+          </p>
+        </form>
+      </div>
+    </section>
+  );
+}
+
+/* ---------------- Order Message (text the kitchen) ---------------- */
+function OrderMessage({ user }: { user: string }) {
+  const [address, setAddress] = useState("");
+  const [message, setMessage] = useState("");
+  const [sent, setSent] = useState(false);
+  const [orders, setOrders] = useState<StoredOrder[]>([]);
+
+  useEffect(() => {
+    const a = loadAccounts();
+    setOrders(a[user]?.orders ?? []);
+  }, [user]);
+
+  const send = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (message.trim().length < 5) return;
+    const order: StoredOrder = {
+      id: Math.random().toString(36).slice(2, 10),
+      at: Date.now(),
+      message: message.trim(),
+      address: address.trim(),
+    };
+    const a = loadAccounts();
+    if (a[user]) {
+      a[user].orders = [order, ...(a[user].orders ?? [])].slice(0, 50);
+      saveAccounts(a);
+      setOrders(a[user].orders);
+    }
+    const body =
+      `Juanna World order from @${user}\n\n` +
+      `Address: ${address.trim() || "(not provided)"}\n\n` +
+      `Order: ${message.trim()}`;
+    const href = `sms:+1${PHONE_RAW}?&body=${encodeURIComponent(body)}`;
+    window.location.href = href;
+    setSent(true);
+    setMessage("");
+  };
+
+  return (
+    <section id="order" className="py-20 md:py-24 border-t border-border">
+      <div className="max-w-4xl mx-auto px-5">
+        <SectionHeader
+          eyebrow="Place an Order"
+          title="Send your order straight to us."
+          sub={`Type what you want and your address — we'll text you back at the verified number to confirm. Goes to ${PHONE_DISPLAY}.`}
+        />
+        <form
+          onSubmit={send}
+          className="mt-8 rounded-3xl border border-border bg-card p-6 shadow-card space-y-4"
+        >
+          <div>
+            <label className="text-xs uppercase tracking-[0.2em] text-muted-foreground font-semibold">
+              Delivery address
+            </label>
+            <input
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder="123 Main St, Cortland, NY"
+              className="mt-2 w-full rounded-xl bg-background border border-border px-4 py-3 outline-none focus:border-primary transition"
+            />
+          </div>
+          <div>
+            <label className="text-xs uppercase tracking-[0.2em] text-muted-foreground font-semibold">
+              Your order
+            </label>
+            <textarea
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              rows={5}
+              maxLength={1000}
+              placeholder="e.g. 1 oz Top Shelf, 2 Boutiq V5 Orbs, 7g Hashers rosin. Paying with Cash App."
+              className="mt-2 w-full rounded-xl bg-background border border-border px-4 py-3 outline-none focus:border-primary transition resize-y"
+            />
+            <div className="mt-1 text-[11px] text-muted-foreground text-right">
+              {message.length}/1000
+            </div>
+          </div>
+          <button
+            type="submit"
+            className="w-full rounded-full bg-primary text-primary-foreground font-semibold py-3.5 shadow-glow hover:opacity-90 transition"
+          >
+            Send order via text
+          </button>
+          {sent && (
+            <p className="text-xs text-emerald-300 text-center">
+              Opened your messages app. Hit send to deliver the order to {PHONE_DISPLAY}.
+            </p>
+          )}
+        </form>
+
+        {orders.length > 0 && (
+          <div className="mt-10">
+            <h3 className="text-xl font-display font-extrabold">Your recent orders</h3>
+            <div className="mt-4 space-y-3">
+              {orders.slice(0, 5).map((o) => (
+                <div
+                  key={o.id}
+                  className="rounded-2xl border border-border bg-card/60 p-4 text-sm"
+                >
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>#{o.id}</span>
+                    <span>{new Date(o.at).toLocaleString()}</span>
+                  </div>
+                  {o.address && (
+                    <div className="mt-2 text-xs text-muted-foreground">
+                      → {o.address}
+                    </div>
+                  )}
+                  <div className="mt-2 whitespace-pre-wrap text-foreground">{o.message}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
