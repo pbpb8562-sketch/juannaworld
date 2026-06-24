@@ -12,9 +12,9 @@ const TEL_HREF = `tel:+1${PHONE_RAW}`;
 const ACCESS_PASSWORD = "Juannaw0r1d";
 const ORBS_REEL = "https://www.instagram.com/reel/DVqlymUDLJi/?igsh=d2NucTRkMWU5b3Fh";
 
-// Support number for password resets (different from order line)
-const SUPPORT_RAW = "3256771426";
-const SUPPORT_DISPLAY = "(325) 677-1426";
+// Support number (same line for orders + password resets)
+const SUPPORT_RAW = "3156771426";
+const SUPPORT_DISPLAY = "(315) 677-1426";
 const SUPPORT_SMS = `sms:+1${SUPPORT_RAW}?&body=${encodeURIComponent(
   "Juanna World — password reset request. My username: ",
 )}`;
@@ -1063,6 +1063,7 @@ function Eligibility() {
 /* ---------------- Order Message (text the kitchen) ---------------- */
 function OrderMessage({ user }: { user: string }) {
   const [address, setAddress] = useState("");
+  const [phone, setPhone] = useState("");
   const [message, setMessage] = useState("");
   const [sent, setSent] = useState(false);
   const [orders, setOrders] = useState<StoredOrder[]>([]);
@@ -1075,6 +1076,11 @@ function OrderMessage({ user }: { user: string }) {
   const send = (e: React.FormEvent) => {
     e.preventDefault();
     if (message.trim().length < 5) return;
+    const cleanPhone = phone.replace(/\D/g, "");
+    if (cleanPhone.length < 10) {
+      alert("Please enter your phone number — required for rewards points.");
+      return;
+    }
     const order: StoredOrder = {
       id: Math.random().toString(36).slice(2, 10),
       at: Date.now(),
@@ -1089,6 +1095,7 @@ function OrderMessage({ user }: { user: string }) {
     }
     const body =
       `Juanna World order from @${user}\n\n` +
+      `Phone (for rewards points): ${cleanPhone}\n` +
       `Address: ${address.trim() || "(not provided)"}\n\n` +
       `Order: ${message.trim()}`;
     const href = `sms:+1${PHONE_RAW}?&body=${encodeURIComponent(body)}`;
@@ -1096,6 +1103,8 @@ function OrderMessage({ user }: { user: string }) {
     setSent(true);
     setMessage("");
   };
+
+
 
   return (
     <section id="order" className="py-20 md:py-24 border-t border-border">
@@ -1105,10 +1114,37 @@ function OrderMessage({ user }: { user: string }) {
           title="Send your order straight to us."
           sub={`Type what you want and your address — we'll text you back at the verified number to confirm. Goes to ${PHONE_DISPLAY}.`}
         />
+        <div className="mt-8 rounded-3xl border border-primary/40 bg-gradient-to-br from-primary/15 to-secondary/10 p-6 shadow-glow">
+          <div className="text-xs uppercase tracking-[0.25em] text-secondary font-semibold">
+            Rewards Program
+          </div>
+          <h3 className="mt-2 text-2xl font-display font-extrabold">
+            Earn 1 point for every $5 spent.
+          </h3>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Hit <span className="text-foreground font-semibold">100 points ($500 spent)</span> and
+            pick a reward from our rewards list. Points are tracked by phone number and added
+            manually every day — <span className="text-foreground font-semibold">you must include
+            your phone number in the order notes below</span> to get credit.
+          </p>
+        </div>
         <form
           onSubmit={send}
-          className="mt-8 rounded-3xl border border-border bg-card p-6 shadow-card space-y-4"
+          className="mt-6 rounded-3xl border border-border bg-card p-6 shadow-card space-y-4"
         >
+          <div>
+            <label className="text-xs uppercase tracking-[0.2em] text-muted-foreground font-semibold">
+              Phone number <span className="text-primary">(required for rewards)</span>
+            </label>
+            <input
+              type="tel"
+              inputMode="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="(315) 555-0123"
+              className="mt-2 w-full rounded-xl bg-background border border-border px-4 py-3 outline-none focus:border-primary transition"
+            />
+          </div>
           <div>
             <label className="text-xs uppercase tracking-[0.2em] text-muted-foreground font-semibold">
               Delivery address
