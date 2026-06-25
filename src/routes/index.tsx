@@ -1,8 +1,12 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import logo from "@/assets/juanna-world-logo.png.asset.json";
-const ORB_IMG_URL = "/IMG_0335.png";
+import { supabase } from "@/integrations/supabase/client";
+import { getMenu } from "@/lib/menu.functions";
 
+const ORB_IMG_URL = "/IMG_0335.png";
 const PHONE_RAW = "3156771426";
 const PHONE_DISPLAY = "(315) 677-1426";
 const SMS_HREF = `sms:+1${PHONE_RAW}?&body=${encodeURIComponent(
@@ -11,76 +15,9 @@ const SMS_HREF = `sms:+1${PHONE_RAW}?&body=${encodeURIComponent(
 const TEL_HREF = `tel:+1${PHONE_RAW}`;
 const ACCESS_PASSWORD = "Juannaw0r1d";
 const ORBS_REEL = "https://www.instagram.com/reel/DVqlymUDLJi/?igsh=d2NucTRkMWU5b3Fh";
-
-// Support number (same line for orders + password resets)
-const SUPPORT_RAW = "3156771426";
-const SUPPORT_DISPLAY = "(315) 677-1426";
-const SUPPORT_SMS = `sms:+1${SUPPORT_RAW}?&body=${encodeURIComponent(
-  "Juanna World — password reset request. My username: ",
-)}`;
-
-// Planet Fitness, Cortland NY (819 NY-13) — delivery origin
 const ORIGIN_LAT = 42.5876;
 const ORIGIN_LNG = -76.1518;
 const DELIVERY_RADIUS_MI = 40;
-
-function DeliveryStatus() {
-  const [status, setStatus] = useState<"open" | "preorder" | "closed">("closed");
-  const [label, setLabel] = useState("");
-
-  useEffect(() => {
-    const now = new Date();
-    const hour = now.getHours();
-    const day = now.getDay();
-    const isWeekday = day >= 1 && day <= 6;
-
-    if (isWeekday && hour >= 10 && hour < 18) {
-      setStatus("open");
-      setLabel("Delivering Now · 10am–6pm");
-    } else if (day === 0) {
-      setStatus("preorder");
-      setLabel("Sunday Preorders · Text to schedule");
-    } else {
-      setStatus("closed");
-      const nextOpen = isWeekday && hour >= 18 ? "tomorrow at 10am" : "10am";
-      setLabel(`Closed · Back ${nextOpen}`);
-    }
-  }, []);
-
-  const dotColor =
-    status === "open"
-      ? "bg-emerald-400"
-      : status === "preorder"
-        ? "bg-amber-400"
-        : "bg-muted-foreground";
-
-  const glow =
-    status === "open"
-      ? "shadow-[0_0_12px_rgba(52,211,153,0.6)]"
-      : status === "preorder"
-        ? "shadow-[0_0_12px_rgba(251,191,36,0.5)]"
-        : "";
-
-  return (
-    <span className="inline-flex items-center gap-2.5 rounded-full border border-border bg-card/60 px-3.5 py-1.5 text-xs font-medium text-muted-foreground">
-      <span
-        className={`relative flex h-2.5 w-2.5 ${status === "open" ? "animate-pulse" : ""}`}
-      >
-        <span
-          className={`absolute inline-flex h-full w-full rounded-full ${dotColor} opacity-75 ${glow}`}
-          style={
-            status === "open"
-              ? { animation: "pulse-ring 2s cubic-bezier(0.4,0,0.6,1) infinite" }
-              : undefined
-          }
-        />
-        <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${dotColor}`} />
-      </span>
-      <span className="text-foreground font-semibold">{label}</span>
-      <span className="hidden sm:inline text-muted-foreground">· Mon–Sat 10am–6pm</span>
-    </span>
-  );
-}
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -105,26 +42,41 @@ export const Route = createFileRoute("/")({
 
 function Home() {
   const [unlocked, setUnlocked] = useState(false);
-  const [user, setUser] = useState<string | null>(null);
+  const [session, setSession] = useState<{ email?: string } | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (sessionStorage.getItem("jw_unlocked") === "1") setUnlocked(true);
-    const u = sessionStorage.getItem("jw_user");
-    if (u) setUser(u);
   }, []);
 
-  const signOut = () => {
-    sessionStorage.removeItem("jw_user");
-    setUser(null);
-  };
+  useEffect(() => {
+    let mounted = true;
+    supabase.auth.getUser().then(async ({ data }) => {
+      if (!mounted) return;
+      setSession(data.user ? { email: data.user.email } : null);
+      if (data.user) {
+        const { data: roles } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", data.user.id);
+        if (mounted) setIsAdmin((roles ?? []).some((r) => r.role === "admin"));
+      }
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_evt, s) => {
+      setSession(s?.user ? { email: s.user.email } : null);
+    });
+    return () => {
+      mounted = false;
+      sub.subscription.unsubscribe();
+    };
+  }, []);
 
   if (!unlocked) return <Gate onUnlock={() => setUnlocked(true)} />;
-  if (!user) return <AccountGate onAuth={(u: string) => setUser(u)} />;
 
   return (
     <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
-      <Nav user={user} onSignOut={signOut} />
+      <Nav session={session} isAdmin={isAdmin} />
       <Hero />
       <Eligibility />
       <Stats />
@@ -132,39 +84,70 @@ function Home() {
       <Orbs />
       <Wholesale />
       <Payments />
-      <OrderMessage user={user} />
-      <Verify />
+      <Verify session={session} />
       <Footer />
     </div>
   );
 }
 
-/* ---------------- Access Gate (phone + password) ---------------- */
+/* ---------------- Delivery status ---------------- */
+function DeliveryStatus() {
+  const [status, setStatus] = useState<"open" | "preorder" | "closed">("closed");
+  const [label, setLabel] = useState("");
+  useEffect(() => {
+    const now = new Date();
+    const hour = now.getHours();
+    const day = now.getDay();
+    const isWeekday = day >= 1 && day <= 6;
+    if (isWeekday && hour >= 10 && hour < 18) {
+      setStatus("open");
+      setLabel("Delivering Now · 10am–6pm");
+    } else if (day === 0) {
+      setStatus("preorder");
+      setLabel("Sunday Preorders · Text to schedule");
+    } else {
+      setStatus("closed");
+      const nextOpen = isWeekday && hour >= 18 ? "tomorrow at 10am" : "10am";
+      setLabel(`Closed · Back ${nextOpen}`);
+    }
+  }, []);
+  const dotColor =
+    status === "open"
+      ? "bg-emerald-400"
+      : status === "preorder"
+        ? "bg-amber-400"
+        : "bg-muted-foreground";
+  return (
+    <span className="inline-flex items-center gap-2.5 rounded-full border border-border bg-card/60 px-3.5 py-1.5 text-xs font-medium text-muted-foreground">
+      <span className={`relative flex h-2.5 w-2.5 ${status === "open" ? "animate-pulse" : ""}`}>
+        <span className={`absolute inline-flex h-full w-full rounded-full ${dotColor} opacity-75`} />
+        <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${dotColor}`} />
+      </span>
+      <span className="text-foreground font-semibold">{label}</span>
+      <span className="hidden sm:inline text-muted-foreground">· Mon–Sat 10am–6pm</span>
+    </span>
+  );
+}
+
+/* ---------------- Gate ---------------- */
 function Gate({ onUnlock }: { onUnlock: () => void }) {
   const [pw, setPw] = useState("");
   const [err, setErr] = useState<string | null>(null);
-
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (pw.trim() === ACCESS_PASSWORD) {
       sessionStorage.setItem("jw_unlocked", "1");
-      setErr(null);
       onUnlock();
     } else {
       setErr("Incorrect password. Text to verify and request access.");
     }
   };
-
   return (
     <div className="min-h-screen bg-hero text-foreground flex flex-col">
       <div className="flex-1 flex items-center justify-center px-5 py-12">
         <div className="w-full max-w-md">
           <div className="text-center">
-            <img
-              src={logo.url}
-              alt="Juanna World"
-              className="w-28 h-28 mx-auto drop-shadow-2xl animate-float"
-            />
+            <img src={logo.url} alt="Juanna World" className="w-28 h-28 mx-auto drop-shadow-2xl animate-float" />
             <h1 className="mt-6 text-4xl md:text-5xl font-extrabold leading-tight">
               Juanna <span className="text-gradient-flame">World</span>
             </h1>
@@ -172,37 +155,24 @@ function Gate({ onUnlock }: { onUnlock: () => void }) {
               Members-only cannabis delivery · 35 mi around Cortland, NY
             </p>
           </div>
-
           <div className="mt-8 rounded-3xl border border-primary/40 bg-gradient-to-br from-primary/15 to-secondary/10 p-6 shadow-glow text-center">
             <div className="text-xs uppercase tracking-[0.25em] text-secondary font-semibold">
               Step 1 · Text to Verify
             </div>
-            <div className="mt-2 text-3xl md:text-4xl font-display font-extrabold">
-              {PHONE_DISPLAY}
-            </div>
+            <div className="mt-2 text-3xl md:text-4xl font-display font-extrabold">{PHONE_DISPLAY}</div>
             <p className="mt-2 text-xs text-muted-foreground">
               Text us — confirm you're 21+ and we'll reply with the menu password.
             </p>
             <div className="mt-4 flex flex-col sm:flex-row gap-2">
-              <a
-                href={SMS_HREF}
-                className="flex-1 rounded-full bg-primary text-primary-foreground font-semibold px-5 py-3 text-center shadow-glow hover:opacity-90 transition"
-              >
+              <a href={SMS_HREF} className="flex-1 rounded-full bg-primary text-primary-foreground font-semibold px-5 py-3 text-center shadow-glow hover:opacity-90 transition">
                 Text to Verify
               </a>
-              <a
-                href={TEL_HREF}
-                className="flex-1 rounded-full border border-border bg-card px-5 py-3 font-semibold text-center hover:bg-muted transition"
-              >
+              <a href={TEL_HREF} className="flex-1 rounded-full border border-border bg-card px-5 py-3 font-semibold text-center hover:bg-muted transition">
                 Save Contact
               </a>
             </div>
           </div>
-
-          <form
-            onSubmit={submit}
-            className="mt-6 rounded-3xl border border-border bg-card p-6 shadow-card"
-          >
+          <form onSubmit={submit} className="mt-6 rounded-3xl border border-border bg-card p-6 shadow-card">
             <label className="text-xs uppercase tracking-[0.25em] text-muted-foreground font-semibold">
               Step 2 · Enter Password
             </label>
@@ -214,13 +184,8 @@ function Gate({ onUnlock }: { onUnlock: () => void }) {
               placeholder="Menu password"
               className="mt-3 w-full rounded-xl bg-background border border-border px-4 py-3 text-base outline-none focus:border-primary transition"
             />
-            {err && (
-              <p className="mt-2 text-sm text-red-400">{err}</p>
-            )}
-            <button
-              type="submit"
-              className="mt-4 w-full rounded-full bg-primary text-primary-foreground font-semibold py-3 shadow-glow hover:opacity-90 transition"
-            >
+            {err && <p className="mt-2 text-sm text-red-400">{err}</p>}
+            <button type="submit" className="mt-4 w-full rounded-full bg-primary text-primary-foreground font-semibold py-3 shadow-glow hover:opacity-90 transition">
               Unlock Menu
             </button>
             <p className="mt-3 text-[11px] text-muted-foreground text-center leading-relaxed">
@@ -237,7 +202,13 @@ function Gate({ onUnlock }: { onUnlock: () => void }) {
 }
 
 /* ---------------- Nav ---------------- */
-function Nav({ user, onSignOut }: { user: string; onSignOut: () => void }) {
+function Nav({
+  session,
+  isAdmin,
+}: {
+  session: { email?: string } | null;
+  isAdmin: boolean;
+}) {
   return (
     <header className="sticky top-0 z-40 backdrop-blur-xl bg-background/70 border-b border-border">
       <div className="max-w-6xl mx-auto px-5 py-3 flex items-center justify-between gap-3">
@@ -252,18 +223,22 @@ function Nav({ user, onSignOut }: { user: string; onSignOut: () => void }) {
           <a href="#menu" className="hover:text-foreground transition">Menu</a>
           <a href="#orbs" className="hover:text-foreground transition">Orbs</a>
           <a href="#payments" className="hover:text-foreground transition">Payment</a>
-          <a href="#order" className="hover:text-foreground transition">Order</a>
         </nav>
         <div className="flex items-center gap-2">
-          <span className="hidden sm:inline text-xs text-muted-foreground">
-            Hi, <span className="text-foreground font-semibold">{user}</span>
-          </span>
-          <button
-            onClick={onSignOut}
-            className="rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold hover:bg-muted transition"
-          >
-            Sign out
-          </button>
+          {isAdmin && (
+            <Link to="/admin" className="rounded-full bg-primary text-primary-foreground px-3 py-1.5 text-xs font-bold shadow-glow">
+              Admin
+            </Link>
+          )}
+          {session ? (
+            <Link to="/dashboard" className="rounded-full bg-primary text-primary-foreground px-4 py-1.5 text-xs font-bold shadow-glow">
+              Dashboard
+            </Link>
+          ) : (
+            <Link to="/auth" className="rounded-full bg-primary text-primary-foreground px-4 py-1.5 text-xs font-bold shadow-glow">
+              Sign in
+            </Link>
+          )}
         </div>
       </div>
     </header>
@@ -285,30 +260,21 @@ function Hero() {
             Discreet, fast, and curated by smokers for the smokers.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <a
-              href={SMS_HREF}
+            <Link
+              to="/auth"
               className="rounded-full bg-primary text-primary-foreground font-semibold px-6 py-3.5 shadow-glow hover:opacity-90 transition"
             >
-              Text {PHONE_DISPLAY}
-            </a>
-            <a
-              href="#menu"
-              className="rounded-full border border-border bg-card px-6 py-3.5 font-semibold hover:bg-muted transition"
-            >
+              Create account · Order online
+            </Link>
+            <a href="#menu" className="rounded-full border border-border bg-card px-6 py-3.5 font-semibold hover:bg-muted transition">
               See the menu
             </a>
           </div>
-          <p className="mt-4 text-xs text-muted-foreground">
-            21+ only. Verified members only.
-          </p>
+          <p className="mt-4 text-xs text-muted-foreground">21+ only. Verified members only.</p>
         </div>
         <div className="relative flex justify-center md:justify-end">
           <div className="absolute inset-0 blur-3xl opacity-50 bg-gradient-to-br from-primary/50 to-secondary/40 rounded-full" />
-          <img
-            src={logo.url}
-            alt="Juanna World logo"
-            className="relative w-72 md:w-[26rem] animate-float drop-shadow-2xl"
-          />
+          <img src={logo.url} alt="Juanna World logo" className="relative w-72 md:w-[26rem] animate-float drop-shadow-2xl" />
         </div>
       </div>
     </section>
@@ -327,12 +293,8 @@ function Stats() {
       <div className="max-w-6xl mx-auto px-5 py-8 grid grid-cols-2 md:grid-cols-4 gap-6">
         {items.map((i) => (
           <div key={i.v} className="text-center md:text-left">
-            <div className="text-3xl md:text-4xl font-display font-extrabold text-gradient-flame">
-              {i.k}
-            </div>
-            <div className="text-xs uppercase tracking-widest text-muted-foreground mt-1">
-              {i.v}
-            </div>
+            <div className="text-3xl md:text-4xl font-display font-extrabold text-gradient-flame">{i.k}</div>
+            <div className="text-xs uppercase tracking-widest text-muted-foreground mt-1">{i.v}</div>
           </div>
         ))}
       </div>
@@ -340,152 +302,95 @@ function Stats() {
   );
 }
 
-/* ---------------- Menu ---------------- */
-type Tier = {
-  name: string;
-  tag: string;
-  oz?: string;
-  lb?: string;
-  vibe: string;
-  highlight?: boolean;
-};
-
-const flower: Tier[] = [
-  {
-    name: "Top Shelf",
-    tag: "Tier 1",
-    oz: "$120",
-    lb: "$1,400",
-    vibe: "Loud, hand-trimmed, exotic strain rotation.",
-    highlight: true,
-  },
-  {
-    name: "Mid Shelf",
-    tag: "Tier 2",
-    oz: "$100",
-    lb: "$1,200",
-    vibe: "Strong daily-driver flower at a working price.",
-  },
-  {
-    name: "Pound Special",
-    tag: "Tier 3",
-    lb: "$900",
-    vibe: "Bulk price. Solid smoke, unbeatable per-gram.",
-  },
-];
-
-const concentrates = [
-  {
-    name: "Non-CRC Live Resin",
-    sub: "Full-spectrum, no color remediation",
-    price: "$120",
-    unit: "/ oz",
-    desc: "Pure terps, real color, real flavor. Nothing stripped out.",
-  },
-  {
-    name: "Hashers Anonymous Live Rosin",
-    sub: "Solventless · cold-cured",
-    tiers: [
-      { q: "1g", p: "$50" },
-      { q: "7g", p: "$275" },
-      { q: "14g", p: "$525" },
-      { q: "28g", p: "$1,000" },
-    ],
-    desc: "Top-tier solventless rosin pressed from top-tier hash.",
-  },
-];
-
+/* ---------------- Menu (dynamic from cache) ---------------- */
 function Menu() {
+  const fetchMenu = useServerFn(getMenu);
+  const menu = useQuery({ queryKey: ["menu"], queryFn: () => fetchMenu() });
+  const sections = menu.data?.parsed?.sections ?? [];
+
   return (
     <section id="menu" className="py-20 md:py-28">
       <div className="max-w-6xl mx-auto px-5">
         <SectionHeader
           eyebrow="The Menu"
-          title="Flower, in three tiers."
-          sub="Three quality levels. Pick your price, we'll bring the heat."
+          title="What's in stock."
+          sub="Auto-synced from our live drop sheet every 2 hours."
         />
-        <div className="mt-10 grid md:grid-cols-3 gap-5">
-          {flower.map((t) => (
-            <div
-              key={t.name}
-              className={`relative rounded-3xl border p-7 shadow-card transition hover:-translate-y-1 ${
-                t.highlight
-                  ? "bg-gradient-to-br from-primary/15 to-secondary/10 border-primary/40"
-                  : "bg-card border-border"
-              }`}
-            >
-              {t.highlight && (
-                <span className="absolute -top-3 left-7 rounded-full bg-primary text-primary-foreground text-[10px] font-bold uppercase tracking-widest px-3 py-1">
-                  Most Loved
-                </span>
-              )}
-              <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                {t.tag}
+
+        {menu.isLoading && (
+          <p className="mt-10 text-muted-foreground">Loading menu…</p>
+        )}
+
+        {!menu.isLoading && sections.length === 0 && (
+          <div className="mt-10 rounded-3xl border border-border bg-card p-8 text-center">
+            <p className="text-muted-foreground">
+              Menu syncing — text {PHONE_DISPLAY} for today's drops while we refresh.
+            </p>
+          </div>
+        )}
+
+        <div className="mt-10 space-y-14">
+          {sections.map((section, i) => (
+            <div key={`${section.title}-${i}`}>
+              <div className="flex items-center gap-3 mb-5">
+                <div className="text-xs uppercase tracking-[0.25em] text-secondary font-semibold">
+                  {section.title}
+                </div>
+                <div className="flex-1 h-px bg-gradient-to-r from-border to-transparent" />
               </div>
-              <h3 className="mt-2 text-2xl">{t.name}</h3>
-              <p className="mt-2 text-sm text-muted-foreground">{t.vibe}</p>
-              <div className="mt-6 space-y-2 border-t border-border pt-4">
-                {t.oz && <Row label="Ounce" value={t.oz} />}
-                {t.lb && <Row label="Pound" value={t.lb} />}
+              <div className="grid md:grid-cols-3 gap-5">
+                {section.rows.map((row, ridx) => {
+                  const [name, ...rest] = row;
+                  const priceish = rest.find((s) => /\$|\d/.test(s));
+                  const others = rest.filter((s) => s !== priceish);
+                  const highlight = ridx === 0 && i === 0;
+                  return (
+                    <div
+                      key={ridx}
+                      className={`relative rounded-3xl border p-7 shadow-card transition hover:-translate-y-1 ${
+                        highlight
+                          ? "bg-gradient-to-br from-primary/15 to-secondary/10 border-primary/40"
+                          : "bg-card border-border"
+                      }`}
+                    >
+                      {highlight && (
+                        <span className="absolute -top-3 left-7 rounded-full bg-primary text-primary-foreground text-[10px] font-bold uppercase tracking-widest px-3 py-1">
+                          Top of section
+                        </span>
+                      )}
+                      <h3 className="text-2xl pr-16">{name}</h3>
+                      {priceish && (
+                        <div className="absolute top-7 right-7 rounded-full bg-primary/15 text-primary border border-primary/30 px-3 py-1 text-xs font-bold">
+                          {priceish}
+                        </div>
+                      )}
+                      {others.length > 0 && (
+                        <div className="mt-4 flex flex-wrap gap-1.5">
+                          {others.map((o, oi) => (
+                            <span
+                              key={oi}
+                              className="rounded-full bg-background/40 border border-border text-xs text-muted-foreground px-2.5 py-1"
+                            >
+                              {o}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           ))}
         </div>
 
-        <div className="mt-16 grid lg:grid-cols-2 gap-5">
-          {concentrates.map((c) => (
-            <div
-              key={c.name}
-              className="rounded-3xl border border-border bg-card p-7 shadow-card"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h3 className="text-2xl">{c.name}</h3>
-                  <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground mt-1">
-                    {c.sub}
-                  </div>
-                </div>
-                {"price" in c && c.price && (
-                  <div className="text-right shrink-0">
-                    <div className="text-3xl font-display font-extrabold text-gradient-flame">
-                      {c.price}
-                    </div>
-                    <div className="text-xs text-muted-foreground">{c.unit}</div>
-                  </div>
-                )}
-              </div>
-              <p className="mt-3 text-sm text-muted-foreground">{c.desc}</p>
-              {"tiers" in c && c.tiers && (
-                <div className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {c.tiers.map((t) => (
-                    <div
-                      key={t.q}
-                      className="rounded-xl border border-border bg-background/40 p-3 text-center"
-                    >
-                      <div className="text-xs uppercase tracking-widest text-muted-foreground">
-                        {t.q}
-                      </div>
-                      <div className="text-lg font-display font-extrabold text-foreground mt-1">
-                        {t.p}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
+        {menu.data?.fetched_at && (
+          <p className="mt-10 text-[11px] text-muted-foreground text-center">
+            Last menu sync: {new Date(menu.data.fetched_at).toLocaleString()}
+          </p>
+        )}
       </div>
     </section>
-  );
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between">
-      <span className="text-sm text-muted-foreground">{label}</span>
-      <span className="font-display font-extrabold text-lg text-foreground">{value}</span>
-    </div>
   );
 }
 
@@ -500,70 +405,42 @@ function SectionHeader({
 }) {
   return (
     <div className="max-w-2xl">
-      <div className="text-xs uppercase tracking-[0.25em] text-secondary font-semibold">
-        {eyebrow}
-      </div>
+      <div className="text-xs uppercase tracking-[0.25em] text-secondary font-semibold">{eyebrow}</div>
       <h2 className="mt-3 text-4xl md:text-5xl font-extrabold leading-tight">{title}</h2>
       {sub && <p className="mt-3 text-muted-foreground">{sub}</p>}
     </div>
   );
 }
 
-/* ---------------- Orbs (2g Disposable Vape) ---------------- */
+/* ---------------- Orbs ---------------- */
 function Orbs() {
   return (
     <section id="orbs" className="py-20 md:py-24 bg-card/40 border-y border-border">
       <div className="max-w-6xl mx-auto px-5 grid md:grid-cols-2 gap-12 items-center">
         <div>
-          <SectionHeader
-            eyebrow="Vapes"
-            title="Boutiq V5 Orbs"
-            sub="$50 each — 2g all-in-one disposable vape."
-          />
+          <SectionHeader eyebrow="Vapes" title="Boutiq V5 Orbs" sub="$50 each — 2g all-in-one disposable vape." />
           <div className="mt-6 space-y-4 text-muted-foreground">
             <p>
-              <strong className="text-foreground">What they are:</strong> The Boutiq V5 Orb is a
-              fully <strong className="text-foreground">disposable 2-gram vape</strong> — no cart, no battery to charge separately, no buttons. You pull straight
-              from the device and toss it when it's done.
+              <strong className="text-foreground">What they are:</strong> The Boutiq V5 Orb is a fully{" "}
+              <strong className="text-foreground">disposable 2-gram vape</strong> — no cart, no battery to charge separately, no buttons.
             </p>
             <p>
-              Each Orb is filled with <strong className="text-foreground">2 grams of live-resin
-              cannabis oil</strong> — strain-specific, high-terpene, and made without cutting
-              agents like PG, VG, or MCT. The V5 generation upgrades the hardware: improved
-              airflow, a bigger built-in battery to actually finish the full 2g, and a smoother
-              draw than older pod systems.
-            </p>
-            <p>
-              Translation: <em className="text-foreground">discreet, potent, full-flavor — open
-              the box, rip it, throw it away when empty.</em>
+              Each Orb is filled with <strong className="text-foreground">2 grams of live-resin cannabis oil</strong> — strain-specific, high-terpene, no cutting agents.
             </p>
           </div>
           <div className="mt-6 flex flex-wrap gap-3">
-            <a
-              href={ORBS_REEL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 rounded-full bg-primary text-primary-foreground font-semibold px-5 py-3 shadow-glow hover:opacity-90 transition"
-            >
+            <a href={ORBS_REEL} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-full bg-primary text-primary-foreground font-semibold px-5 py-3 shadow-glow hover:opacity-90 transition">
               ▶ Watch the Orb in action
             </a>
-            <a
-              href={SMS_HREF}
-              className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-5 py-3 font-semibold hover:bg-muted transition"
-            >
-             Grab one Now! — $50
-            </a>
+            <Link to="/auth" className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-5 py-3 font-semibold hover:bg-muted transition">
+              Order one — $50
+            </Link>
           </div>
         </div>
         <div className="relative max-w-md mx-auto w-full">
           <div className="absolute inset-0 bg-gradient-to-br from-accent/30 via-primary/20 to-secondary/30 rounded-full blur-3xl" />
           <div className="relative rounded-3xl border border-border bg-background/40 backdrop-blur overflow-hidden">
-            <img
-              src={ORB_IMG_URL}
-              alt="Boutiq V5 Orb 2g disposable vape"
-              className="w-full h-auto object-cover"
-              loading="lazy"
-            />
+            <img src={ORB_IMG_URL} alt="Boutiq V5 Orb 2g disposable vape" className="w-full h-auto object-cover" loading="lazy" />
             <div className="absolute bottom-4 right-4 rounded-full bg-primary text-primary-foreground text-sm font-bold px-4 py-2 shadow-glow">
               $50 / orb
             </div>
@@ -574,7 +451,6 @@ function Orbs() {
   );
 }
 
-/* ---------------- Wholesale ---------------- */
 function Wholesale() {
   return (
     <section id="wholesale" className="py-20 md:py-24">
@@ -582,22 +458,14 @@ function Wholesale() {
         <div className="rounded-3xl border border-border bg-gradient-to-br from-secondary/20 via-card to-primary/10 p-8 md:p-14 shadow-card">
           <div className="grid md:grid-cols-[1.4fr_1fr] gap-8 items-center">
             <div>
-              <div className="text-xs uppercase tracking-[0.25em] text-accent font-semibold">
-                Bulk Buyers
-              </div>
-              <h2 className="mt-3 text-4xl md:text-5xl font-extrabold">
-                Larger wholesale menu available.
-              </h2>
+              <div className="text-xs uppercase tracking-[0.25em] text-accent font-semibold">Bulk Buyers</div>
+              <h2 className="mt-3 text-4xl md:text-5xl font-extrabold">Larger wholesale menu available.</h2>
               <p className="mt-4 text-muted-foreground max-w-xl">
-                Moving units? We carry a deeper wholesale catalog — pricing scales with volume.
-                Text us for the full sheet, references, and current drops.
+                Moving units? We carry a deeper wholesale catalog — pricing scales with volume. Text us for the full sheet.
               </p>
             </div>
             <div className="flex md:justify-end">
-              <a
-                href={SMS_HREF}
-                className="inline-flex items-center justify-center rounded-full bg-primary text-primary-foreground font-semibold px-7 py-4 shadow-glow hover:opacity-90 transition"
-              >
+              <a href={SMS_HREF} className="inline-flex items-center justify-center rounded-full bg-primary text-primary-foreground font-semibold px-7 py-4 shadow-glow hover:opacity-90 transition">
                 Request Wholesale Menu
               </a>
             </div>
@@ -608,122 +476,20 @@ function Wholesale() {
   );
 }
 
-/* ---------------- Verify ---------------- */
-function Verify() {
-  const steps = [
-    {
-      n: "01",
-      t: "Text us",
-      d: `Send a quick text to ${PHONE_DISPLAY} from your phone — that becomes your verified line.`,
-    },
-    {
-      n: "02",
-      t: "Confirm 21+",
-      d: "Reply with your name and confirm you're 21 or older. We'll verify and add you to the list.",
-    },
-    {
-      n: "03",
-      t: "Order & deliver",
-      d: "Tell us what you want and where you are. We deliver within 35 miles of Cortland, NY.",
-    },
-  ];
-  return (
-    <section id="verify" className="py-20 md:py-28 bg-card/40 border-y border-border">
-      <div className="max-w-6xl mx-auto px-5">
-        <SectionHeader
-          eyebrow="Get Verified"
-          title="Text to verify. Then you're in."
-          sub="No app, no signup. Just a quick text and you're on the list."
-        />
-        <div className="mt-10 grid md:grid-cols-3 gap-5">
-          {steps.map((s) => (
-            <div
-              key={s.n}
-              className="rounded-3xl border border-border bg-card p-7 shadow-card"
-            >
-              <div className="text-5xl font-display font-extrabold text-gradient-flame">
-                {s.n}
-              </div>
-              <h3 className="mt-3 text-xl">{s.t}</h3>
-              <p className="mt-2 text-sm text-muted-foreground">{s.d}</p>
-            </div>
-          ))}
-        </div>
-        <div className="mt-10 rounded-3xl border border-primary/40 bg-gradient-to-br from-primary/15 to-secondary/10 p-8 md:p-12 flex flex-col md:flex-row items-center justify-between gap-6 shadow-glow">
-          <div>
-            <div className="text-xs uppercase tracking-[0.25em] text-secondary font-semibold">
-              Verification Line
-            </div>
-            <div className="mt-2 text-4xl md:text-5xl font-display font-extrabold">
-              {PHONE_DISPLAY}
-            </div>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Text only — calls will not be answered for new orders.
-            </p>
-          </div>
-          <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
-            <a
-              href={SMS_HREF}
-              className="rounded-full bg-primary text-primary-foreground font-semibold px-6 py-3.5 text-center shadow-glow hover:opacity-90 transition"
-            >
-              Text to Verify
-            </a>
-            <a
-              href={TEL_HREF}
-              className="rounded-full border border-border bg-card px-6 py-3.5 font-semibold text-center hover:bg-muted transition"
-            >
-              Save Contact
-            </a>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-/* ---------------- Payments ---------------- */
 function Payments() {
   const methods = [
-    {
-      name: "Cash App",
-      tag: "$JuannaWorld",
-      d: "Send as 'Friends' with no note about product. Screenshot the receipt and text it in to confirm your drop.",
-      accent: "from-emerald-400 to-green-600",
-      icon: "$",
-    },
-    {
-      name: "PayPal",
-      tag: "Friends & Family only",
-      d: "Request our handle when you text to verify. Send F&F — no item description. Forward the confirmation email or screenshot.",
-      accent: "from-sky-400 to-blue-600",
-      icon: "P",
-    },
-    {
-      name: "Cash on Delivery",
-      tag: "Exact change preferred Must Have Extra Verification",
-      d: "Pay your driver in cash at the door. Have ID ready (21+). Tips appreciated and go straight to the driver.",
-      accent: "from-amber-400 to-orange-600",
-      icon: "$",
-    },
+    { name: "Cash App", tag: "$JuannaWorld", d: "Send as 'Friends' with no note about product. Screenshot the receipt and text it in to confirm your drop.", accent: "from-emerald-400 to-green-600", icon: "$" },
+    { name: "PayPal", tag: "Friends & Family only", d: "Request our handle when you text to verify. Send F&F — no item description.", accent: "from-sky-400 to-blue-600", icon: "P" },
+    { name: "Cash on Delivery", tag: "Exact change preferred", d: "Pay your driver in cash at the door. Have ID ready (21+). Tips appreciated.", accent: "from-amber-400 to-orange-600", icon: "$" },
   ];
-
   return (
     <section id="payments" className="py-20 md:py-28">
       <div className="max-w-6xl mx-auto px-5">
-        <SectionHeader
-          eyebrow="Checkout"
-          title="Pay your way."
-          sub="Three easy options. Lock in your order over text — we'll confirm payment details before the driver rolls out."
-        />
+        <SectionHeader eyebrow="Checkout" title="Pay your way." sub="Three easy options." />
         <div className="grid md:grid-cols-3 gap-5 mt-12">
           {methods.map((m) => (
-            <div
-              key={m.name}
-              className="rounded-3xl border border-border bg-card/60 p-7 hover:border-primary/40 transition group"
-            >
-              <div
-                className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${m.accent} flex items-center justify-center text-2xl font-extrabold text-white shadow-glow mb-5`}
-              >
+            <div key={m.name} className="rounded-3xl border border-border bg-card/60 p-7 hover:border-primary/40 transition group">
+              <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${m.accent} flex items-center justify-center text-2xl font-extrabold text-white shadow-glow mb-5`}>
                 {m.icon}
               </div>
               <div className="font-display text-2xl font-bold">{m.name}</div>
@@ -732,17 +498,47 @@ function Payments() {
             </div>
           ))}
         </div>
-        <div className="mt-8 rounded-2xl border border-border/60 bg-card/30 p-5 text-xs text-muted-foreground text-center">
-          Digital payments must be sent as <span className="text-foreground font-semibold">Friends & Family</span> with
-          no product references. Orders are on the way after payment is confirmed (COD excluded).
+      </div>
+    </section>
+  );
+}
+
+function Verify({ session }: { session: { email?: string } | null }) {
+  return (
+    <section id="verify" className="py-20 md:py-28 bg-card/40 border-y border-border">
+      <div className="max-w-6xl mx-auto px-5">
+        <SectionHeader eyebrow="Order Now" title="Already verified?" sub="Sign in to your account to place orders, see history, and track rewards points." />
+        <div className="mt-10 rounded-3xl border border-primary/40 bg-gradient-to-br from-primary/15 to-secondary/10 p-8 md:p-12 flex flex-col md:flex-row items-center justify-between gap-6 shadow-glow">
+          <div>
+            <div className="text-xs uppercase tracking-[0.25em] text-secondary font-semibold">
+              {session ? "Signed in" : "Account access"}
+            </div>
+            <div className="mt-2 text-3xl md:text-4xl font-display font-extrabold">
+              {session ? "Go to your dashboard →" : "Create your account →"}
+            </div>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {session
+                ? "Place orders, track delivery status, and watch your rewards points add up."
+                : "Sign up with the same phone number you texted from to start earning rewards."}
+            </p>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+            <Link
+              to={session ? "/dashboard" : "/auth"}
+              className="rounded-full bg-primary text-primary-foreground font-semibold px-6 py-3.5 text-center shadow-glow hover:opacity-90 transition"
+            >
+              {session ? "Open Dashboard" : "Sign in / Sign up"}
+            </Link>
+            <a href={SMS_HREF} className="rounded-full border border-border bg-card px-6 py-3.5 font-semibold text-center hover:bg-muted transition">
+              Or text {PHONE_DISPLAY}
+            </a>
+          </div>
         </div>
       </div>
     </section>
   );
 }
 
-
-/* ---------------- Footer ---------------- */
 function Footer() {
   return (
     <footer className="py-14">
@@ -754,23 +550,15 @@ function Footer() {
               <div className="font-display font-extrabold text-lg">
                 Juanna <span className="text-gradient-flame">World</span>
               </div>
-              <div className="text-xs text-muted-foreground">
-                Cannabis delivery · Cortland, NY · 35 mi radius
-              </div>
+              <div className="text-xs text-muted-foreground">Cannabis delivery · Cortland, NY · 35 mi radius</div>
             </div>
           </div>
-          <a
-            href={SMS_HREF}
-            className="text-sm text-muted-foreground hover:text-foreground transition"
-          >
+          <a href={SMS_HREF} className="text-sm text-muted-foreground hover:text-foreground transition">
             Text {PHONE_DISPLAY}
           </a>
         </div>
         <div className="mt-8 border-t border-border pt-6 text-xs text-muted-foreground leading-relaxed max-w-3xl">
-          21+ only. By using this site you confirm you are of legal age. Juanna World does not
-          ship cannabis products. All transactions, when applicable, are conducted in compliance
-          with New York State law between verified adults. Please consume responsibly and never
-          drive impaired.
+          21+ only. By using this site you confirm you are of legal age. Juanna World does not ship cannabis products. All transactions, when applicable, are conducted in compliance with New York State law between verified adults. Please consume responsibly and never drive impaired.
         </div>
         <div className="mt-4 text-xs text-muted-foreground">
           © {new Date().getFullYear()} Juanna World. All rights reserved.
@@ -780,168 +568,13 @@ function Footer() {
   );
 }
 
-/* ---------------- Account Gate (signup / login) ---------------- */
-type Account = { password: string; createdAt: number; orders: StoredOrder[] };
-type StoredOrder = { id: string; at: number; message: string; address: string };
-
-function loadAccounts(): Record<string, Account> {
-  try {
-    return JSON.parse(localStorage.getItem("jw_accounts") || "{}");
-  } catch {
-    return {};
-  }
-}
-function saveAccounts(a: Record<string, Account>) {
-  localStorage.setItem("jw_accounts", JSON.stringify(a));
-}
-
-async function hashPw(pw: string): Promise<string> {
-  const buf = new TextEncoder().encode(pw + "::jw-salt-v1");
-  const digest = await crypto.subtle.digest("SHA-256", buf);
-  return Array.from(new Uint8Array(digest))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-function AccountGate({ onAuth }: { onAuth: (username: string) => void }) {
-  const [mode, setMode] = useState<"login" | "signup">("login");
-  const [username, setUsername] = useState("");
-  const [pw, setPw] = useState("");
-  const [err, setErr] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErr(null);
-    const u = username.trim().toLowerCase();
-    if (!u || u.length < 3) return setErr("Username must be at least 3 characters.");
-    if (!/^[a-z0-9_.-]+$/.test(u))
-      return setErr("Letters, numbers, dot, dash, underscore only.");
-    if (pw.length < 6) return setErr("Password must be at least 6 characters.");
-
-    setBusy(true);
-    try {
-      const accounts = loadAccounts();
-      const hashed = await hashPw(pw);
-      if (mode === "signup") {
-        if (accounts[u]) {
-          setErr("That username already exists. Try logging in.");
-          return;
-        }
-        accounts[u] = { password: hashed, createdAt: Date.now(), orders: [] };
-        saveAccounts(accounts);
-      } else {
-        if (!accounts[u] || accounts[u].password !== hashed) {
-          setErr("Wrong username or password.");
-          return;
-        }
-      }
-      sessionStorage.setItem("jw_user", u);
-      onAuth(u);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div className="min-h-screen bg-hero text-foreground flex flex-col">
-      <div className="flex-1 flex items-center justify-center px-5 py-12">
-        <div className="w-full max-w-md">
-          <div className="text-center">
-            <img src={logo.url} alt="Juanna World" className="w-24 h-24 mx-auto drop-shadow-2xl" />
-            <h1 className="mt-5 text-3xl md:text-4xl font-extrabold">
-              {mode === "signup" ? "Create your account" : "Welcome back"}
-            </h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Your account stores your order history & info on this device.
-            </p>
-          </div>
-
-          <form
-            onSubmit={submit}
-            className="mt-8 rounded-3xl border border-border bg-card p-6 shadow-card space-y-4"
-          >
-            <div>
-              <label className="text-xs uppercase tracking-[0.2em] text-muted-foreground font-semibold">
-                Username
-              </label>
-              <input
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                autoComplete="username"
-                placeholder="yourname"
-                className="mt-2 w-full rounded-xl bg-background border border-border px-4 py-3 outline-none focus:border-primary transition"
-              />
-            </div>
-            <div>
-              <label className="text-xs uppercase tracking-[0.2em] text-muted-foreground font-semibold">
-                Password
-              </label>
-              <input
-                type="password"
-                value={pw}
-                onChange={(e) => setPw(e.target.value)}
-                autoComplete={mode === "signup" ? "new-password" : "current-password"}
-                placeholder="••••••••"
-                className="mt-2 w-full rounded-xl bg-background border border-border px-4 py-3 outline-none focus:border-primary transition"
-              />
-            </div>
-            {err && <p className="text-sm text-red-400">{err}</p>}
-            <button
-              type="submit"
-              disabled={busy}
-              className="w-full rounded-full bg-primary text-primary-foreground font-semibold py-3 shadow-glow hover:opacity-90 transition disabled:opacity-60"
-            >
-              {busy ? "..." : mode === "signup" ? "Create account" : "Log in"}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setErr(null);
-                setMode(mode === "signup" ? "login" : "signup");
-              }}
-              className="w-full text-xs text-muted-foreground hover:text-foreground transition"
-            >
-              {mode === "signup"
-                ? "Already have an account? Log in"
-                : "New here? Create an account"}
-            </button>
-          </form>
-
-          <div className="mt-5 rounded-2xl border border-border bg-card/60 p-5 text-center">
-            <div className="text-xs uppercase tracking-[0.2em] text-secondary font-semibold">
-              Forgot password?
-            </div>
-            <p className="mt-2 text-xs text-muted-foreground">
-              Text our support line and we'll get you back in.
-            </p>
-            <a
-              href={SUPPORT_SMS}
-              className="mt-3 inline-block rounded-full bg-secondary text-secondary-foreground font-semibold px-5 py-2.5 text-sm hover:opacity-90 transition"
-            >
-              Text Support · {SUPPORT_DISPLAY}
-            </a>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ---------------- Eligibility (distance from Planet Fitness Cortland) ---------------- */
-function haversineMiles(
-  lat1: number,
-  lng1: number,
-  lat2: number,
-  lng2: number,
-): number {
+/* ---------------- Eligibility ---------------- */
+function haversineMiles(lat1: number, lng1: number, lat2: number, lng2: number) {
   const toRad = (d: number) => (d * Math.PI) / 180;
   const R = 3958.7613;
   const dLat = toRad(lat2 - lat1);
   const dLng = toRad(lng2 - lng1);
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
   return 2 * R * Math.asin(Math.sqrt(a));
 }
 
@@ -953,7 +586,6 @@ function Eligibility() {
     | { ok: false; error: string }
     | null
   >(null);
-
   const check = async (e: React.FormEvent) => {
     e.preventDefault();
     const q = addr.trim();
@@ -966,11 +598,7 @@ function Eligibility() {
     try {
       const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&q=${encodeURIComponent(q)}`;
       const res = await fetch(url, { headers: { Accept: "application/json" } });
-      const data = (await res.json()) as Array<{
-        lat: string;
-        lon: string;
-        display_name: string;
-      }>;
+      const data = (await res.json()) as Array<{ lat: string; lon: string; display_name: string }>;
       if (!data.length) {
         setResult({ ok: false, error: "Couldn't find that address. Try adding city + state." });
         return;
@@ -978,72 +606,36 @@ function Eligibility() {
       const lat = parseFloat(data[0].lat);
       const lng = parseFloat(data[0].lon);
       const miles = haversineMiles(ORIGIN_LAT, ORIGIN_LNG, lat, lng);
-      setResult({
-        ok: true,
-        miles,
-        label: data[0].display_name,
-        eligible: miles <= DELIVERY_RADIUS_MI,
-      });
+      setResult({ ok: true, miles, label: data[0].display_name, eligible: miles <= DELIVERY_RADIUS_MI });
     } catch {
       setResult({ ok: false, error: "Network error. Try again in a sec." });
     } finally {
       setBusy(false);
     }
   };
-
   return (
     <section id="eligibility" className="py-16 md:py-20 border-b border-border">
       <div className="max-w-3xl mx-auto px-5">
-        <SectionHeader
-          eyebrow="Delivery Check"
-          title="Are you in our zone?"
-          sub={`We deliver within ${DELIVERY_RADIUS_MI} miles of Planet Fitness in Cortland, NY. Drop your address to see if we can roll to you.`}
-        />
-        <form
-          onSubmit={check}
-          className="mt-8 rounded-3xl border border-border bg-card p-5 md:p-6 shadow-card"
-        >
+        <SectionHeader eyebrow="Delivery Check" title="Are you in our zone?" sub={`We deliver within ${DELIVERY_RADIUS_MI} miles of Planet Fitness in Cortland, NY.`} />
+        <form onSubmit={check} className="mt-8 rounded-3xl border border-border bg-card p-5 md:p-6 shadow-card">
           <div className="flex flex-col sm:flex-row gap-3">
-            <input
-              value={addr}
-              onChange={(e) => setAddr(e.target.value)}
-              placeholder="123 Main St, Cortland, NY"
-              className="flex-1 rounded-xl bg-background border border-border px-4 py-3 outline-none focus:border-primary transition"
-            />
-            <button
-              type="submit"
-              disabled={busy}
-              className="rounded-full bg-primary text-primary-foreground font-semibold px-6 py-3 shadow-glow hover:opacity-90 transition disabled:opacity-60"
-            >
+            <input value={addr} onChange={(e) => setAddr(e.target.value)} placeholder="123 Main St, Cortland, NY" className="flex-1 rounded-xl bg-background border border-border px-4 py-3 outline-none focus:border-primary transition" />
+            <button type="submit" disabled={busy} className="rounded-full bg-primary text-primary-foreground font-semibold px-6 py-3 shadow-glow hover:opacity-90 transition disabled:opacity-60">
               {busy ? "Checking..." : "Check delivery"}
             </button>
           </div>
           {result && (
-            <div
-              className={`mt-5 rounded-2xl border p-4 text-sm ${
-                result.ok
-                  ? result.eligible
-                    ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-100"
-                    : "border-amber-500/40 bg-amber-500/10 text-amber-100"
-                  : "border-red-500/40 bg-red-500/10 text-red-200"
-              }`}
-            >
+            <div className={`mt-5 rounded-2xl border p-4 text-sm ${result.ok ? (result.eligible ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-100" : "border-amber-500/40 bg-amber-500/10 text-amber-100") : "border-red-500/40 bg-red-500/10 text-red-200"}`}>
               {result.ok ? (
                 result.eligible ? (
                   <>
-                    <div className="font-display font-extrabold text-lg">
-                      ✓ You're in. {result.miles.toFixed(1)} mi away.
-                    </div>
+                    <div className="font-display font-extrabold text-lg">✓ You're in. {result.miles.toFixed(1)} mi away.</div>
                     <div className="opacity-80 mt-1 text-xs">{result.label}</div>
                   </>
                 ) : (
                   <>
-                    <div className="font-display font-extrabold text-lg">
-                      Out of zone — {result.miles.toFixed(1)} mi away.
-                    </div>
-                    <div className="opacity-80 mt-1 text-xs">
-                      We only deliver within {DELIVERY_RADIUS_MI} mi of Cortland.
-                    </div>
+                    <div className="font-display font-extrabold text-lg">Out of zone — {result.miles.toFixed(1)} mi away.</div>
+                    <div className="opacity-80 mt-1 text-xs">We only deliver within {DELIVERY_RADIUS_MI} mi of Cortland.</div>
                   </>
                 )
               ) : (
@@ -1051,164 +643,7 @@ function Eligibility() {
               )}
             </div>
           )}
-          <p className="mt-3 text-[11px] text-muted-foreground">
-            Address lookup via OpenStreetMap. Your address isn't saved unless you add it to an order.
-          </p>
         </form>
-      </div>
-    </section>
-  );
-}
-
-/* ---------------- Order Message (text the kitchen) ---------------- */
-function OrderMessage({ user }: { user: string }) {
-  const [address, setAddress] = useState("");
-  const [phone, setPhone] = useState("");
-  const [message, setMessage] = useState("");
-  const [sent, setSent] = useState(false);
-  const [orders, setOrders] = useState<StoredOrder[]>([]);
-
-  useEffect(() => {
-    const a = loadAccounts();
-    setOrders(a[user]?.orders ?? []);
-  }, [user]);
-
-  const send = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (message.trim().length < 5) return;
-    const cleanPhone = phone.replace(/\D/g, "");
-    if (cleanPhone.length < 10) {
-      alert("Please enter your phone number — required for rewards points.");
-      return;
-    }
-    const order: StoredOrder = {
-      id: Math.random().toString(36).slice(2, 10),
-      at: Date.now(),
-      message: message.trim(),
-      address: address.trim(),
-    };
-    const a = loadAccounts();
-    if (a[user]) {
-      a[user].orders = [order, ...(a[user].orders ?? [])].slice(0, 50);
-      saveAccounts(a);
-      setOrders(a[user].orders);
-    }
-    const body =
-      `Juanna World order from @${user}\n\n` +
-      `Phone (for rewards points): ${cleanPhone}\n` +
-      `Address: ${address.trim() || "(not provided)"}\n\n` +
-      `Order: ${message.trim()}`;
-    const href = `sms:+1${PHONE_RAW}?&body=${encodeURIComponent(body)}`;
-    window.location.href = href;
-    setSent(true);
-    setMessage("");
-  };
-
-
-
-  return (
-    <section id="order" className="py-20 md:py-24 border-t border-border">
-      <div className="max-w-4xl mx-auto px-5">
-        <SectionHeader
-          eyebrow="Place an Order"
-          title="Send your order straight to us."
-          sub={`Type what you want and your address — we'll text you back at the verified number to confirm. Goes to ${PHONE_DISPLAY}.`}
-        />
-        <div className="mt-8 rounded-3xl border border-primary/40 bg-gradient-to-br from-primary/15 to-secondary/10 p-6 shadow-glow">
-          <div className="text-xs uppercase tracking-[0.25em] text-secondary font-semibold">
-            Rewards Program
-          </div>
-          <h3 className="mt-2 text-2xl font-display font-extrabold">
-            Earn 1 point for every $5 spent.
-          </h3>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Hit <span className="text-foreground font-semibold">100 points ($500 spent)</span> and
-            pick a reward from our rewards list. Points are tracked by phone number and added
-            manually every day — <span className="text-foreground font-semibold">you must include
-            your phone number in the order notes below</span> to get credit.
-          </p>
-        </div>
-        <form
-          onSubmit={send}
-          className="mt-6 rounded-3xl border border-border bg-card p-6 shadow-card space-y-4"
-        >
-          <div>
-            <label className="text-xs uppercase tracking-[0.2em] text-muted-foreground font-semibold">
-              Phone number <span className="text-primary">(required for rewards)</span>
-            </label>
-            <input
-              type="tel"
-              inputMode="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="(315) 555-0123"
-              className="mt-2 w-full rounded-xl bg-background border border-border px-4 py-3 outline-none focus:border-primary transition"
-            />
-          </div>
-          <div>
-            <label className="text-xs uppercase tracking-[0.2em] text-muted-foreground font-semibold">
-              Delivery address
-            </label>
-            <input
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              placeholder="123 Main St, Cortland, NY"
-              className="mt-2 w-full rounded-xl bg-background border border-border px-4 py-3 outline-none focus:border-primary transition"
-            />
-          </div>
-          <div>
-            <label className="text-xs uppercase tracking-[0.2em] text-muted-foreground font-semibold">
-              Your order
-            </label>
-            <textarea
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              rows={5}
-              maxLength={1000}
-              placeholder="e.g. 1 oz Top Shelf, 2 Boutiq V5 Orbs, 7g Hashers rosin. Paying with Cash App."
-              className="mt-2 w-full rounded-xl bg-background border border-border px-4 py-3 outline-none focus:border-primary transition resize-y"
-            />
-            <div className="mt-1 text-[11px] text-muted-foreground text-right">
-              {message.length}/1000
-            </div>
-          </div>
-          <button
-            type="submit"
-            className="w-full rounded-full bg-primary text-primary-foreground font-semibold py-3.5 shadow-glow hover:opacity-90 transition"
-          >
-            Send order via text
-          </button>
-          {sent && (
-            <p className="text-xs text-emerald-300 text-center">
-              Opened your messages app. Hit send to deliver the order to {PHONE_DISPLAY}.
-            </p>
-          )}
-        </form>
-
-        {orders.length > 0 && (
-          <div className="mt-10">
-            <h3 className="text-xl font-display font-extrabold">Your recent orders</h3>
-            <div className="mt-4 space-y-3">
-              {orders.slice(0, 5).map((o) => (
-                <div
-                  key={o.id}
-                  className="rounded-2xl border border-border bg-card/60 p-4 text-sm"
-                >
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>#{o.id}</span>
-                    <span>{new Date(o.at).toLocaleString()}</span>
-                  </div>
-                  {o.address && (
-                    <div className="mt-2 text-xs text-muted-foreground">
-                      → {o.address}
-                    </div>
-                  )}
-                  <div className="mt-2 whitespace-pre-wrap text-foreground">{o.message}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
     </section>
   );
