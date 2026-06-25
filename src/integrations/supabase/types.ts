@@ -14,16 +14,150 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      menu_cache: {
+        Row: {
+          error: string | null
+          fetched_at: string | null
+          id: number
+          parsed: Json | null
+          raw_text: string | null
+        }
+        Insert: {
+          error?: string | null
+          fetched_at?: string | null
+          id?: number
+          parsed?: Json | null
+          raw_text?: string | null
+        }
+        Update: {
+          error?: string | null
+          fetched_at?: string | null
+          id?: number
+          parsed?: Json | null
+          raw_text?: string | null
+        }
+        Relationships: []
+      }
+      orders: {
+        Row: {
+          address: string | null
+          created_at: string
+          id: string
+          items: Json
+          message: string | null
+          phone: string | null
+          status: string
+          total: number | null
+          user_id: string
+        }
+        Insert: {
+          address?: string | null
+          created_at?: string
+          id?: string
+          items?: Json
+          message?: string | null
+          phone?: string | null
+          status?: string
+          total?: number | null
+          user_id: string
+        }
+        Update: {
+          address?: string | null
+          created_at?: string
+          id?: string
+          items?: Json
+          message?: string | null
+          phone?: string | null
+          status?: string
+          total?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          id: string
+          phone: string | null
+          points: number
+          username: string
+        }
+        Insert: {
+          created_at?: string
+          id: string
+          phone?: string | null
+          points?: number
+          username: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          phone?: string | null
+          points?: number
+          username?: string
+        }
+        Relationships: []
+      }
+      rewards_ledger: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          points_delta: number
+          reason: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          points_delta: number
+          reason?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          points_delta?: number
+          reason?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "user"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +284,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "user"],
+    },
   },
 } as const
