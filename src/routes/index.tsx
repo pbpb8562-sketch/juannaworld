@@ -52,7 +52,8 @@ function Home() {
 
   useEffect(() => {
     let mounted = true;
-    supabase.auth.getUser().then(async ({ data }) => {
+    const loadUserAndRole = async () => {
+      const { data } = await supabase.auth.getUser();
       if (!mounted) return;
       setSession(data.user ? { email: data.user.email } : null);
       if (data.user) {
@@ -61,10 +62,24 @@ function Home() {
           .select("role")
           .eq("user_id", data.user.id);
         if (mounted) setIsAdmin((roles ?? []).some((r) => r.role === "admin"));
+      } else {
+        setIsAdmin(false);
       }
-    });
+    };
+    loadUserAndRole();
     const { data: sub } = supabase.auth.onAuthStateChange((_evt, s) => {
       setSession(s?.user ? { email: s.user.email } : null);
+      if (!s?.user) {
+        setIsAdmin(false);
+        return;
+      }
+      supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", s.user.id)
+        .then(({ data: roles }) => {
+          if (mounted) setIsAdmin((roles ?? []).some((r) => r.role === "admin"));
+        });
     });
     return () => {
       mounted = false;

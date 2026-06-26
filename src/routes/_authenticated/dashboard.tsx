@@ -68,6 +68,14 @@ function Dashboard() {
           </div>
         </div>
         <div className="max-w-6xl mx-auto px-5 pb-3 flex gap-1 overflow-x-auto">
+          {isAdmin && (
+            <Link
+              to="/admin"
+              className="px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition bg-secondary text-secondary-foreground"
+            >
+              Admin Dashboard
+            </Link>
+          )}
           {(["menu", "order", "orders", "rewards", "support"] as Tab[]).map((t) => (
             <button
               key={t}
